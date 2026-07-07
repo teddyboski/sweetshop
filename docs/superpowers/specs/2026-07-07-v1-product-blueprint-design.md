@@ -191,9 +191,26 @@ Builds on CLAUDE.md's baseline schema (`users`, `boxes`, `box_items`, `snacks`,
   Sites-era Stripe orders (backfilled via Stripe API), kept separate from live
   `orders` since the old data has no real product/box reference. Used for reporting
   continuity and matching returning customers by email.
+- **`audit_logs`** — `actor_id, action, entity_type, entity_id, before jsonb?,
+  after jsonb?, created_at`. The admin/system accountability trail — every
+  admin-initiated mutation (price change, order status update, refund, manual
+  rewards adjustment, role change) writes a row here. Distinct from
+  `customer_activity` (customer-facing behavior, not admin actions) and
+  `inventory_events` (stock-specific only).
 
 **Unchanged from CLAUDE.md:** `users`, `boxes`, `box_items`, `subscriptions`,
 `rewards_ledger`, `referrals`, `drops`, `promotions`.
+
+**Mobile-readiness principle (applies platform-wide, not a new table):** mutating
+business logic — checkout, rewards, referrals, inventory, admin actions — is
+exposed through `/api` Route Handlers or Postgres (RLS/functions), never trapped
+exclusively inside a page-only Next.js Server Action. Supabase Auth and Storage
+already have first-party mobile SDKs, so the only platform-specific risk was
+business logic becoming reachable only from browser-session Server Actions. This
+constraint removes that risk without deferring any V1 work — it changes *where*
+V1 logic lives, not *what* gets built now. A future iOS/Android app (Future Scope
+per CLAUDE.md) would consume the same Route Handlers and RLS-protected tables a
+web client uses, with no backend redesign.
 
 ## 7. App Screens
 
@@ -204,13 +221,15 @@ Account: Profile & Preferences · Account: Order History/Detail/Tracking ·
 Account: Subscriptions (manage/pause/cancel) · Account: Rewards (balance/history/
 redeem) · Account: Referrals (share link/status) · FAQ/About/Contact
 
-**Admin dashboard:** Dashboard Home (revenue, orders today, low-stock alerts) ·
-Products: Boxes (list/create/edit) · Products: Snacks (list/create/edit, inventory,
-price, BYO/individual-sale flags) · Inventory (stock levels + adjustment log) ·
-Orders (list/detail/fulfillment/tracking entry) · Customers (list/detail: orders,
-CLV, preferences, activity) · Rewards (ledger view, manual adjustment) · Referrals
-(list/status) · Promotions (create/edit codes) · Drops (schedule/manage) ·
-Analytics (sales, CLV, repeat-purchase rate) · Settings (admin users/roles)
+**Admin dashboard:** Operations Dashboard (sales today, orders awaiting
+fulfillment, low inventory, active subscriptions, customer growth, repeat
+purchase rate, referral metrics, revenue trends) · Products: Boxes (list/create/
+edit) · Products: Snacks (list/create/edit, inventory, price, BYO/individual-sale
+flags) · Inventory (stock levels + adjustment log) · Orders (list/detail/
+fulfillment/tracking entry) · Customers (list/detail: orders, CLV, preferences,
+activity) · Rewards (ledger view, manual adjustment) · Referrals (list/status) ·
+Promotions (create/edit codes) · Drops (schedule/manage) · Settings (admin users/
+roles)
 
 ## 8. Technology Decisions
 
