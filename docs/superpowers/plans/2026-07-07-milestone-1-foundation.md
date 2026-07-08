@@ -102,15 +102,28 @@ git commit -m "chore: install shadcn/ui with button, card, input primitives"
 
 ---
 
-### Task 3: Create Route Group Skeleton
+### Task 3: Build Route Group Layout Hierarchy
+
+**Supersedes the original placeholder-only version of this task** — now
+follows `docs/superpowers/specs/2026-07-08-routing-architecture-design.md`.
+Scope stays foundation-only: real layout composition and shared chrome
+components, not the actual page content each later milestone owns (box
+detail, account pages, admin pages, etc. are NOT built here).
+
+**Note on `middleware.ts`:** the routing spec's protected-route gate
+(`(account)/*`, `(admin)/*`) depends on the Supabase server client, which
+doesn't exist until Task 7. Middleware is deferred to **Task 7b** (added
+after this plan's Task 7) rather than built here against nothing.
 
 **Files:**
+- Create: `src/components/shared/site-header.tsx`, `src/components/shared/site-footer.tsx`
 - Create: `src/app/(marketing)/layout.tsx`, `src/app/(auth)/layout.tsx`, `src/app/(auth)/page.tsx`, `src/app/(shop)/layout.tsx`, `src/app/(shop)/page.tsx`, `src/app/(account)/layout.tsx`, `src/app/(account)/page.tsx`, `src/app/(admin)/layout.tsx`, `src/app/(admin)/page.tsx`
+- Create: `src/app/not-found.tsx`, `src/app/global-error.tsx`
 - Modify: `src/app/page.tsx` → move to `src/app/(marketing)/page.tsx` (Task 4 fills in real content)
 - Test: `tests/e2e/route-groups.spec.ts`
 
 **Interfaces:**
-- Produces: five resolvable route groups, each rendering a placeholder heading identifying itself, for Task 4+ and later milestones to build inside
+- Produces: `SiteHeader`/`SiteFooter` components (composed into `(marketing)` and `(shop)` layouts per the spec), five resolvable route groups each with a real layout (not a bare `<div>`), a global 404 and global error boundary, for Task 4+ and later milestones to build inside
 
 - [ ] **Step 1: Install Playwright**
 
@@ -138,6 +151,19 @@ for (const [path, expectedText] of routes) {
     await expect(page.getByRole("heading", { name: expectedText })).toBeVisible();
   });
 }
+
+test("marketing and shop pages share the SiteHeader nav", async ({ page }) => {
+  for (const path of ["/", "/shop"]) {
+    await page.goto(path);
+    await expect(page.getByRole("link", { name: "Shop" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Sweet Shop", exact: true })).toBeVisible();
+  }
+});
+
+test("unknown route renders the global not-found page", async ({ page }) => {
+  await page.goto("/this-route-does-not-exist");
+  await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
+});
 ```
 
 - [ ] **Step 3: Run it to verify it fails**
@@ -145,7 +171,46 @@ for (const [path, expectedText] of routes) {
 Run: `npx playwright test tests/e2e/route-groups.spec.ts`
 Expected: FAIL (routes don't exist yet, 404s)
 
-- [ ] **Step 4: Create the route groups**
+- [ ] **Step 4: Create the shared layout components**
+
+Create `src/components/shared/site-header.tsx`:
+```tsx
+import Link from "next/link";
+
+export function SiteHeader() {
+  return (
+    <header className="border-b">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
+        <Link href="/" className="text-lg font-semibold">
+          Sweet Shop
+        </Link>
+        <nav className="flex items-center gap-6 text-sm">
+          <Link href="/shop">Shop</Link>
+          <Link href="/about">About</Link>
+          <Link href="/faq">FAQ</Link>
+          <Link href="/login">Log in</Link>
+        </nav>
+      </div>
+    </header>
+  );
+}
+```
+
+Create `src/components/shared/site-footer.tsx`:
+```tsx
+export function SiteFooter() {
+  return (
+    <footer className="border-t">
+      <div className="mx-auto max-w-6xl px-4 py-6 text-sm text-muted-foreground">
+        © {new Date().getFullYear()} The Sweet Shop. Email us at{" "}
+        Manager@middlemanmerchants.com
+      </div>
+    </footer>
+  );
+}
+```
+
+- [ ] **Step 5: Create the route group layouts and placeholder pages**
 
 Move `src/app/page.tsx` into `src/app/(marketing)/page.tsx`:
 ```tsx
@@ -156,8 +221,17 @@ export default function Home() {
 
 Create `src/app/(marketing)/layout.tsx`:
 ```tsx
+import { SiteHeader } from "@/components/shared/site-header";
+import { SiteFooter } from "@/components/shared/site-footer";
+
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
-  return <div className="marketing-layout">{children}</div>;
+  return (
+    <>
+      <SiteHeader />
+      <main>{children}</main>
+      <SiteFooter />
+    </>
+  );
 }
 ```
 
@@ -170,8 +244,17 @@ export default function ShopHome() {
 
 Create `src/app/(shop)/layout.tsx`:
 ```tsx
+import { SiteHeader } from "@/components/shared/site-header";
+import { SiteFooter } from "@/components/shared/site-footer";
+
 export default function ShopLayout({ children }: { children: React.ReactNode }) {
-  return <div className="shop-layout">{children}</div>;
+  return (
+    <>
+      <SiteHeader />
+      <main>{children}</main>
+      <SiteFooter />
+    </>
+  );
 }
 ```
 
@@ -184,8 +267,20 @@ export default function AccountHome() {
 
 Create `src/app/(account)/layout.tsx`:
 ```tsx
+import { SiteHeader } from "@/components/shared/site-header";
+
 export default function AccountLayout({ children }: { children: React.ReactNode }) {
-  return <div className="account-layout">{children}</div>;
+  return (
+    <>
+      <SiteHeader />
+      <div className="mx-auto flex max-w-6xl gap-8 px-4 py-8">
+        <aside className="w-48 shrink-0 text-sm text-muted-foreground">
+          Account Sidebar Placeholder
+        </aside>
+        <main className="flex-1">{children}</main>
+      </div>
+    </>
+  );
 }
 ```
 
@@ -199,7 +294,14 @@ export default function AdminHome() {
 Create `src/app/(admin)/layout.tsx`:
 ```tsx
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  return <div className="admin-layout">{children}</div>;
+  return (
+    <div className="flex min-h-screen">
+      <aside className="w-56 shrink-0 border-r p-4 text-sm text-muted-foreground">
+        Admin Sidebar Placeholder
+      </aside>
+      <main className="flex-1 p-8">{children}</main>
+    </div>
+  );
 }
 ```
 
@@ -213,20 +315,63 @@ export default function AuthHome() {
 Create `src/app/(auth)/layout.tsx`:
 ```tsx
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
-  return <div className="auth-layout">{children}</div>;
+  return (
+    <div className="flex min-h-screen items-center justify-center">
+      <div className="w-full max-w-sm">{children}</div>
+    </div>
+  );
 }
 ```
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [ ] **Step 6: Create the global not-found and error boundaries**
+
+Create `src/app/not-found.tsx`:
+```tsx
+export default function NotFound() {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-2">
+      <h1>Page not found</h1>
+      <p className="text-muted-foreground">
+        The page you&apos;re looking for doesn&apos;t exist.
+      </p>
+    </div>
+  );
+}
+```
+
+Create `src/app/global-error.tsx`:
+```tsx
+"use client";
+
+export default function GlobalError({
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  return (
+    <html>
+      <body>
+        <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+          <h1>Something went wrong</h1>
+          <button onClick={() => reset()}>Try again</button>
+        </div>
+      </body>
+    </html>
+  );
+}
+```
+
+- [ ] **Step 7: Run the test to verify it passes**
 
 Run: `npx playwright test tests/e2e/route-groups.spec.ts`
-Expected: PASS (4 tests)
+Expected: PASS (6 tests)
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add -A
-git commit -m "feat: add route group skeleton for marketing/auth/shop/account/admin"
+git commit -m "feat: build route group layout hierarchy with shared header/footer"
 ```
 
 ---
@@ -447,6 +592,7 @@ create policy "users update own" on public.users for update using (auth.uid() = 
 -- boxes
 create table public.boxes (
   id uuid primary key default gen_random_uuid(),
+  slug text unique not null,
   title text not null,
   description text,
   price_cents integer not null,
@@ -464,6 +610,7 @@ create policy "boxes admin all" on public.boxes for all using (public.is_admin()
 -- snacks
 create table public.snacks (
   id uuid primary key default gen_random_uuid(),
+  slug text unique not null,
   name text not null,
   brand text,
   category text,
@@ -846,6 +993,114 @@ git commit -m "feat: add generated Supabase types and server/admin/browser clien
 
 ---
 
+### Task 7b: Protected Route Middleware
+
+**Files:**
+- Create: `src/middleware.ts`
+
+**Interfaces:**
+- Consumes: `@supabase/ssr`'s `createServerClient` pattern (same shape as `createServerSupabaseClient` from Task 7, adapted for middleware's request/response objects)
+- Produces: the page-level protected-route gate from `docs/superpowers/specs/2026-07-08-routing-architecture-design.md` — `(account)/*` requires a session, `(admin)/*` requires a session AND `role = 'admin'`, `(auth)/*` redirects an already-authenticated visitor to `/account`. This is the UX-layer gate only — per the routing security standards (`PROJECT_CONSTITUTION.md` §3), it is not a substitute for each Route Handler's own independent auth/role check.
+
+- [ ] **Step 1: Write the failing E2E test**
+
+Create `tests/e2e/middleware.spec.ts`:
+```typescript
+import { test, expect } from "@playwright/test";
+
+test("unauthenticated visitor hitting /account is redirected to /login", async ({ page }) => {
+  await page.goto("/account");
+  await expect(page).toHaveURL(/\/login/);
+});
+
+test("unauthenticated visitor hitting /admin is redirected to /login", async ({ page }) => {
+  await page.goto("/admin");
+  await expect(page).toHaveURL(/\/login/);
+});
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+Run: `npx playwright test tests/e2e/middleware.spec.ts`
+Expected: FAIL (no middleware yet, `/account` and `/admin` render directly)
+
+- [ ] **Step 3: Write the middleware**
+
+Create `src/middleware.ts`:
+```typescript
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
+
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({ request });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll: (cookiesToSet) => {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          response = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          );
+        },
+      },
+    }
+  );
+
+  const { data: { user } } = await supabase.auth.getUser();
+  const { pathname } = request.nextUrl;
+
+  const isAccountRoute = pathname.startsWith("/account");
+  const isAdminRoute = pathname.startsWith("/admin");
+  const isAuthRoute = ["/login", "/signup", "/forgot-password", "/reset-password"].includes(pathname);
+
+  if ((isAccountRoute || isAdminRoute) && !user) {
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("redirect", pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  if (isAdminRoute && user) {
+    const { data: profile } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    if (profile?.role !== "admin") {
+      return NextResponse.redirect(new URL("/account", request.url));
+    }
+  }
+
+  if (isAuthRoute && user) {
+    return NextResponse.redirect(new URL("/account", request.url));
+  }
+
+  return response;
+}
+
+export const config = {
+  matcher: ["/account/:path*", "/admin/:path*", "/login", "/signup", "/forgot-password", "/reset-password"],
+};
+```
+
+- [ ] **Step 4: Run to verify it passes**
+
+Run: `npx playwright test tests/e2e/middleware.spec.ts`
+Expected: PASS (2 tests) — both redirect to `/login` since no session exists yet (Milestone 2 adds real sessions to test the authenticated-but-wrong-role and already-authenticated cases against a real user).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add -A
+git commit -m "feat: add protected-route middleware for account and admin route groups"
+```
+
+---
+
 ### Task 8: Prove the Mobile-Ready Route Handler Boundary
 
 **Files:**
@@ -972,6 +1227,6 @@ git commit -m "chore: add typecheck/lint/test scripts and CI workflow"
 
 ## Milestone 1 Self-Review
 
-- **Spec coverage:** every Milestone 1 bullet from the roadmap (scaffold, RLS schema including `audit_logs`, generated types, env vars, marketing pages, mobile-ready boundary, CI) has a task above.
+- **Spec coverage:** every Milestone 1 bullet from the roadmap (scaffold, RLS schema including `audit_logs`, generated types, env vars, marketing pages, mobile-ready boundary, CI) has a task above; Task 3 and Task 7b additionally cover every element of `docs/superpowers/specs/2026-07-08-routing-architecture-design.md` that belongs to Milestone 1's scope (layout hierarchy, shared header/footer, global error/not-found, protected-route middleware). Page content for `(shop)`/`(account)`/`(admin)` beyond placeholders is deliberately deferred to Milestones 3/7/8 per the roadmap — not a gap.
 - **Placeholder scan:** no TBD/TODO; every step has real code or an exact command.
-- **Type consistency:** `Database` type from Task 7 is the single source later tasks import; `createServerSupabaseClient` / `createAdminSupabaseClient` / `createBrowserSupabaseClient` names are used consistently.
+- **Type consistency:** `Database` type from Task 7 is the single source later tasks import; `createServerSupabaseClient` / `createAdminSupabaseClient` / `createBrowserSupabaseClient` names are used consistently. Task 7b's middleware Supabase client mirrors Task 7's client but is necessarily a separate instantiation (middleware runs in the Edge runtime, can't import the Node-oriented server client as-is) — documented in Task 7b's Interfaces block rather than left implicit.

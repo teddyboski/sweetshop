@@ -95,6 +95,12 @@ docs/
   Never throw an unhandled error to the client; catch and return the `error` shape with an appropriate HTTP status.
 - **Mobile-readiness constraint (from the V1 roadmap):** any endpoint that mutates data — checkout, rewards, referrals, inventory, admin actions — lives in a Route Handler, never exclusively inside a page-only Server Action. Route Handlers must not assume a browser/cookie session is the only way in; prefer patterns that also work with a bearer token, since a future mobile client will call the same surface.
 - **Validation:** every Route Handler validates its input with a Zod schema from `lib/validations` before touching the database. The schema is the source of truth; request/response TypeScript types are derived with `z.infer`, never hand-written separately.
+- **Routing security standards (mandatory):**
+  1. Public routes never require authentication.
+  2. Customer account routes require an authenticated user.
+  3. Admin and operations routes require role-based authorization, not just authentication.
+  4. **Every Route Handler validates authentication and authorization itself, independently of `middleware.ts`.** Middleware is the first gate, not the only one — a Route Handler must not assume a request already passed a UI-layer check before reaching it, since it can be called directly (curl, a future mobile client, a misconfigured matcher). Pair this with RLS as the final backstop, per CLAUDE.md's "never trust client-supplied user IDs — always derive from the authenticated session."
+  5. **Hiding a UI element is never security.** Not showing an "Admin" nav link to a customer, or not rendering a "Delete" button without permission, is a UX nicety — it has zero bearing on whether the underlying route or Route Handler is actually protected. Every protected surface must enforce its own check regardless of what the UI does or doesn't render.
 - **Webhooks:** live under `src/app/api/webhooks/<provider>/route.ts` (e.g. `webhooks/stripe/route.ts`). Always verify the provider's signature before processing. Always idempotent — a webhook handler must safely no-op on a duplicate event ID.
 - **Status codes:** `200` success, `201` created, `400` validation error, `401` unauthenticated, `403` unauthorized (RLS/role failure), `404` not found, `409` conflict (e.g. duplicate webhook, race on limited inventory), `500` unexpected server error.
 
