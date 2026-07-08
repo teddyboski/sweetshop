@@ -38,11 +38,15 @@ Before creating any major feature:
 4. Consider scalability at 10x current load.
 5. Consider the customer experience end to end.
 
-**Prioritize in this order:**
-1. Revenue-generating features
-2. Customer experience
-3. Reliability
-4. Clean, maintainable code
+**Prioritize in this order (single source of truth — mirrored, not restated, in `PROJECT_CONSTITUTION.md` § 0):**
+1. Customer Experience
+2. Reliability & Trust
+3. Revenue Generation
+4. Maintainability
+5. Performance
+6. Developer Convenience
+
+When a technical choice and a business objective conflict, optimize for the business before optimizing for engineering elegance.
 
 ---
 
