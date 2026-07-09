@@ -44,7 +44,7 @@ test("faq page renders as an accordion with real Q&A", async ({ page }) => {
 test("contact page renders", async ({ page }) => {
   await page.goto("/contact");
   await expect(page.getByRole("heading", { name: "Questions? We've got you." })).toBeVisible();
-  await expect(page.getByText("Manager@middlemanmerchants.com")).toBeVisible();
+  await expect(page.locator("main").getByText("Manager@middlemanmerchants.com")).toBeVisible();
 });
 
 test("privacy policy page renders", async ({ page }) => {
