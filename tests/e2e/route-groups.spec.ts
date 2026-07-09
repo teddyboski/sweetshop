@@ -1,7 +1,10 @@
 import { test, expect } from "@playwright/test";
 
+// "/" is intentionally excluded here: Task 4 replaced its placeholder
+// heading with real content ("Snacks that hit different."), already
+// covered by tests/e2e/marketing-pages.spec.ts. The remaining three are
+// still real placeholders awaiting their own milestones (3, 7, 8).
 const routes: Array<[string, string]> = [
-  ["/", "Sweet Shop"],
   ["/shop", "Shop Placeholder"],
   ["/account", "Account Placeholder"],
   ["/admin", "Admin Placeholder"],
