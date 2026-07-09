@@ -378,14 +378,21 @@ git commit -m "feat: build route group layout hierarchy with shared header/foote
 
 ### Task 4: Build Marketing Pages
 
+**Supersedes the original 4-page version of this task** — now builds all 9
+pages from `docs/superpowers/specs/2026-07-08-marketing-pages-design.md`,
+each with real copy (no placeholder text) and Next.js `metadata` exports for
+SEO. `/build-a-box` and `/subscriptions` are marketing explainers whose CTAs
+forward-reference `/shop/build-a-box` (Milestone 4) and `/shop` — those
+targets won't be functional yet, which is expected.
+
 **Files:**
 - Modify: `src/app/(marketing)/page.tsx`
-- Create: `src/app/(marketing)/about/page.tsx`, `src/app/(marketing)/faq/page.tsx`, `src/app/(marketing)/contact/page.tsx`
+- Create: `src/app/(marketing)/about/page.tsx`, `src/app/(marketing)/build-a-box/page.tsx`, `src/app/(marketing)/subscriptions/page.tsx`, `src/app/(marketing)/how-it-works/page.tsx`, `src/app/(marketing)/faq/page.tsx`, `src/app/(marketing)/contact/page.tsx`, `src/app/(marketing)/privacy/page.tsx`, `src/app/(marketing)/terms/page.tsx`
 - Test: `tests/e2e/marketing-pages.spec.ts`
 
 **Interfaces:**
 - Consumes: `(marketing)/layout.tsx` from Task 3
-- Produces: four real marketing pages with actual Sweet Shop copy (sourced from the legacy site analysis in the blueprint spec, Section 1)
+- Produces: nine real marketing pages with actual Sweet Shop copy and per-page SEO metadata, for Task 3's `SiteHeader` nav links (currently only Shop/About/FAQ/Login) to eventually link to — this task does not modify `SiteHeader`, that's a follow-up not in scope here
 
 - [ ] **Step 1: Write the failing test**
 
@@ -395,42 +402,120 @@ import { test, expect } from "@playwright/test";
 
 test("home page shows the Sweet Shop value proposition", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "The Sweet Shop" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Snacks that hit different." })).toBeVisible();
   await expect(page.getByText(/hand-packed/i)).toBeVisible();
+  await expect(page).toHaveTitle(/The Sweet Shop \| Hand-Packed Snack Boxes/);
 });
 
 test("about page renders", async ({ page }) => {
   await page.goto("/about");
-  await expect(page.getByRole("heading", { name: "About The Sweet Shop" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "We started on Whatnot. We never stopped hand-packing." })).toBeVisible();
+  await expect(page).toHaveTitle(/About The Sweet Shop/);
 });
 
-test("faq page renders", async ({ page }) => {
+test("build-a-box marketing page renders and links to the functional builder", async ({ page }) => {
+  await page.goto("/build-a-box");
+  await expect(page.getByRole("heading", { name: "Three sizes. Your call on what's inside." })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Start Building" })).toHaveAttribute("href", "/shop/build-a-box");
+  await expect(page).toHaveTitle(/Build Your Own Snack Box/);
+});
+
+test("subscriptions marketing page renders", async ({ page }) => {
+  await page.goto("/subscriptions");
+  await expect(page.getByRole("heading", { name: "A fresh exotic haul, every month." })).toBeVisible();
+  await expect(page.getByText("Cancel anytime")).toBeVisible();
+  await expect(page).toHaveTitle(/Monthly Snack Box Subscription/);
+});
+
+test("how-it-works page renders all four steps", async ({ page }) => {
+  await page.goto("/how-it-works");
+  await expect(page.getByText("Pick your box")).toBeVisible();
+  await expect(page.getByText("Earn rewards")).toBeVisible();
+  await expect(page.getByText("Refer a friend")).toBeVisible();
+});
+
+test("faq page renders as an accordion with real Q&A", async ({ page }) => {
   await page.goto("/faq");
   await expect(page.getByRole("heading", { name: "Frequently Asked Questions" })).toBeVisible();
+  await expect(page.getByText("Can I cancel my subscription?")).toBeVisible();
+  await expect(page.getByText("Do you ship internationally?")).toBeVisible();
 });
 
 test("contact page renders", async ({ page }) => {
   await page.goto("/contact");
-  await expect(page.getByRole("heading", { name: "Contact Us" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Questions? We've got you." })).toBeVisible();
   await expect(page.getByText("Manager@middlemanmerchants.com")).toBeVisible();
+});
+
+test("privacy policy page renders", async ({ page }) => {
+  await page.goto("/privacy");
+  await expect(page.getByRole("heading", { name: "Privacy Policy" })).toBeVisible();
+  await expect(page.getByText(/Stripe/)).toBeVisible();
+});
+
+test("terms page renders", async ({ page }) => {
+  await page.goto("/terms");
+  await expect(page.getByRole("heading", { name: "Terms of Service" })).toBeVisible();
+  await expect(page.getByText(/cancel anytime/i)).toBeVisible();
 });
 ```
 
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `npx playwright test tests/e2e/marketing-pages.spec.ts`
-Expected: FAIL (`/about`, `/faq`, `/contact` don't exist; home page has old placeholder heading)
+Expected: FAIL (only `/` exists, with the old placeholder heading; the other 8 routes 404)
 
 - [ ] **Step 3: Write the pages**
 
 Replace `src/app/(marketing)/page.tsx`:
 ```tsx
+import type { Metadata } from "next";
+import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "The Sweet Shop | Hand-Packed Snack Boxes, Build-Your-Own & Subscriptions",
+  description:
+    "Curated snack boxes, build-your-own boxes, mystery drops, and a monthly subscription — hand-packed fresh to order and shipped fast.",
+};
+
 export default function Home() {
   return (
-    <main>
-      <h1>The Sweet Shop</h1>
-      <p>Hand-packed & shipped fast. Curated snack boxes, build-your-own boxes,
-      mystery drops, and a monthly subscription — exotic snacking made easy.</p>
+    <main className="mx-auto max-w-3xl px-4 py-16">
+      <h1 className="text-4xl font-bold">Snacks that hit different.</h1>
+      <p className="mt-4 text-lg text-muted-foreground">
+        Hand-packed, shipped fast, and never boring. From best-seller boxes to
+        build-your-own, mystery drops to a monthly subscription — The Sweet
+        Shop is snacking, leveled up.
+      </p>
+      <Link
+        href="/shop"
+        className="mt-8 inline-block rounded-md bg-primary px-6 py-3 text-primary-foreground"
+      >
+        Shop Boxes
+      </Link>
+
+      <div className="mt-16 rounded-lg border p-6">
+        <div className="text-sm font-medium text-muted-foreground">🍿 Best Seller</div>
+        <h2 className="mt-1 text-xl font-semibold">Munchie Box — $15</h2>
+        <p className="mt-2 text-muted-foreground">
+          The ultimate snack attack. Chips, candy, gummies &amp; a surprise
+          bonus snack.
+        </p>
+      </div>
+
+      <div className="mt-12 text-center">
+        <p className="text-muted-foreground">
+          Catch us live — new drops &amp; giveaways every week on Whatnot.
+        </p>
+        <a
+          href="https://www.whatnot.com/user/thesweetshop"
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 inline-block underline"
+        >
+          Follow @sweet_shop_official
+        </a>
+      </div>
     </main>
   );
 }
@@ -438,13 +523,144 @@ export default function Home() {
 
 Create `src/app/(marketing)/about/page.tsx`:
 ```tsx
+import type { Metadata } from "next";
+import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "About The Sweet Shop — Curated Snacks, Hand-Packed With Love",
+  description:
+    "The Sweet Shop started live on Whatnot and never stopped hand-packing every box fresh to order.",
+};
+
 export default function About() {
   return (
-    <main>
-      <h1>About The Sweet Shop</h1>
-      <p>The Sweet Shop curates snack boxes from around the world — candy,
-      chips, and exotic imports, hand-packed fresh to order. We started as a
-      Whatnot live-selling shop and grew into a full snack box platform.</p>
+    <main className="mx-auto max-w-3xl px-4 py-16">
+      <h1 className="text-3xl font-bold">
+        We started on Whatnot. We never stopped hand-packing.
+      </h1>
+      <p className="mt-4 text-lg text-muted-foreground">
+        The Sweet Shop began as a live-selling snack shop — literally packing
+        boxes on camera for people who love snacks as much as we do. Every box
+        is still hand-packed fresh to order, no exceptions. We just added a
+        storefront so you don&apos;t have to catch us live to get in on it.
+      </p>
+      <Link
+        href="/shop"
+        className="mt-8 inline-block rounded-md bg-primary px-6 py-3 text-primary-foreground"
+      >
+        Shop Boxes
+      </Link>
+    </main>
+  );
+}
+```
+
+Create `src/app/(marketing)/build-a-box/page.tsx`:
+```tsx
+import type { Metadata } from "next";
+import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Build Your Own Snack Box | Custom Snack Boxes — The Sweet Shop",
+  description:
+    "Pick a size, tell us your preferences, and we'll hand-pack a custom snack box just for you. Perfect for picky snackers and gifts.",
+};
+
+export default function BuildABox() {
+  return (
+    <main className="mx-auto max-w-3xl px-4 py-16">
+      <h1 className="text-3xl font-bold">Three sizes. Your call on what&apos;s inside.</h1>
+      <p className="mt-4 text-lg text-muted-foreground">
+        Small (8 items) · Medium (15 items) · Large (25 items). Tell us your
+        preferences, we&apos;ll pack it fresh — perfect for picky snackers and
+        even better as a gift.
+      </p>
+      <p className="mt-2 font-medium">
+        Small $15 · Medium $25 · Large $35 — one flat price per size, no
+        surprises at checkout.
+      </p>
+      <Link
+        href="/shop/build-a-box"
+        className="mt-8 inline-block rounded-md bg-primary px-6 py-3 text-primary-foreground"
+      >
+        Start Building
+      </Link>
+    </main>
+  );
+}
+```
+
+Create `src/app/(marketing)/subscriptions/page.tsx`:
+```tsx
+import type { Metadata } from "next";
+import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Monthly Snack Box Subscription | $50/mo Exotic Snacks — The Sweet Shop",
+  description:
+    "A fresh exotic snack haul every month for $50. Cancel anytime, no contracts.",
+};
+
+export default function Subscriptions() {
+  return (
+    <main className="mx-auto max-w-3xl px-4 py-16">
+      <h1 className="text-3xl font-bold">A fresh exotic haul, every month.</h1>
+      <p className="mt-2 text-2xl font-semibold">$50/month</p>
+      <p className="mt-4 text-lg text-muted-foreground">
+        Curated by The Sweet Shop. New flavors, new imports, always worth more
+        than you paid.
+      </p>
+      <p className="mt-2 font-medium">Cancel anytime — no contracts, no hassle.</p>
+      <Link
+        href="/shop"
+        className="mt-8 inline-block rounded-md bg-primary px-6 py-3 text-primary-foreground"
+      >
+        Subscribe Now
+      </Link>
+    </main>
+  );
+}
+```
+
+Create `src/app/(marketing)/how-it-works/page.tsx`:
+```tsx
+import type { Metadata } from "next";
+import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "How It Works | The Sweet Shop — Order, Ship, Earn Rewards",
+  description:
+    "Pick your box, we pack it fresh and ship fast, you earn rewards on every order, and you can refer friends for credit.",
+};
+
+const steps = [
+  { title: "Pick your box", body: "Curated, mystery, or build-your-own." },
+  { title: "We pack it fresh", body: "Hand-packed to order, shipped fast." },
+  { title: "Earn rewards", body: "Every order earns points toward your next box." },
+  { title: "Refer a friend", body: "You both get credit when they order." },
+];
+
+export default function HowItWorks() {
+  return (
+    <main className="mx-auto max-w-3xl px-4 py-16">
+      <h1 className="text-3xl font-bold">How It Works</h1>
+      <ol className="mt-8 space-y-6">
+        {steps.map((step, i) => (
+          <li key={step.title} className="flex gap-4">
+            <span className="text-2xl font-bold text-muted-foreground">{i + 1}</span>
+            <div>
+              <h2 className="font-semibold">{step.title}</h2>
+              <p className="text-muted-foreground">{step.body}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <Link
+        href="/shop"
+        className="mt-8 inline-block rounded-md bg-primary px-6 py-3 text-primary-foreground"
+      >
+        Shop Now
+      </Link>
     </main>
   );
 }
@@ -452,18 +668,57 @@ export default function About() {
 
 Create `src/app/(marketing)/faq/page.tsx`:
 ```tsx
+import type { Metadata } from "next";
+import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "FAQs | Shipping, Subscriptions & More — The Sweet Shop",
+  description:
+    "Answers on shipping speed, mystery boxes, subscription cancellation, international shipping, and allergens.",
+};
+
+const faqs = [
+  {
+    q: "How fast do you ship?",
+    a: "Every box is packed fresh to order and ships fast, domestically.",
+  },
+  {
+    q: "What if I don't like what's in my Mystery Box?",
+    a: "That's the fun of it — but if something's wrong with your order, email us and we'll make it right.",
+  },
+  {
+    q: "Can I cancel my subscription?",
+    a: "Yes, anytime, from your account page. No contracts.",
+  },
+  {
+    q: "Do you ship internationally?",
+    a: "Not yet — domestic U.S. shipping only for now.",
+  },
+  {
+    q: "Are allergens listed?",
+    a: "Each snack's page lists nutrition info where available — always check before gifting to someone with dietary restrictions.",
+  },
+];
+
 export default function Faq() {
   return (
-    <main>
-      <h1>Frequently Asked Questions</h1>
-      <section>
-        <h2>How fast do you ship?</h2>
-        <p>Every box is packed fresh to order and ships fast, domestically.</p>
-      </section>
-      <section>
-        <h2>Can I cancel my subscription?</h2>
-        <p>Yes — cancel anytime from your account page.</p>
-      </section>
+    <main className="mx-auto max-w-3xl px-4 py-16">
+      <h1 className="text-3xl font-bold">Frequently Asked Questions</h1>
+      <div className="mt-8 space-y-2">
+        {faqs.map((item) => (
+          <details key={item.q} className="rounded-md border p-4">
+            <summary className="cursor-pointer font-medium">{item.q}</summary>
+            <p className="mt-2 text-muted-foreground">{item.a}</p>
+          </details>
+        ))}
+      </div>
+      <p className="mt-8 text-muted-foreground">
+        Still have questions?{" "}
+        <Link href="/contact" className="underline">
+          Email us
+        </Link>{" "}
+        — or if you&apos;re ready, <Link href="/shop" className="underline">shop now</Link>.
+      </p>
     </main>
   );
 }
@@ -471,11 +726,106 @@ export default function Faq() {
 
 Create `src/app/(marketing)/contact/page.tsx`:
 ```tsx
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Contact The Sweet Shop",
+  description: "Get in touch with The Sweet Shop — we usually reply within 1 business day.",
+};
+
 export default function Contact() {
   return (
-    <main>
-      <h1>Contact Us</h1>
-      <p>Email us at Manager@middlemanmerchants.com</p>
+    <main className="mx-auto max-w-3xl px-4 py-16">
+      <h1 className="text-3xl font-bold">Questions? We&apos;ve got you.</h1>
+      <p className="mt-4 text-lg text-muted-foreground">
+        Email{" "}
+        <a href="mailto:Manager@middlemanmerchants.com" className="underline">
+          Manager@middlemanmerchants.com
+        </a>{" "}
+        — we usually reply within 1 business day. Or catch us live on Whatnot
+        and ask right there.
+      </p>
+    </main>
+  );
+}
+```
+
+Create `src/app/(marketing)/privacy/page.tsx`:
+```tsx
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Privacy Policy — The Sweet Shop",
+  description: "How The Sweet Shop collects, uses, and protects your data.",
+};
+
+export default function Privacy() {
+  return (
+    <main className="mx-auto max-w-3xl px-4 py-16">
+      <h1 className="text-3xl font-bold">Privacy Policy</h1>
+      <div className="mt-6 space-y-4 text-muted-foreground">
+        <p>
+          We collect your email, shipping address, order history, and any
+          preferences you tell us about, so we can fulfill and personalize
+          your orders.
+        </p>
+        <p>
+          Payments are processed by Stripe — we never store your card details
+          directly.
+        </p>
+        <p>
+          We share data only with the processors we use to run the business:
+          Stripe (payments), Resend (order emails), and Supabase (hosting). We
+          do not sell your data to anyone.
+        </p>
+        <p>
+          We use session and authentication cookies only — no third-party ad
+          tracking.
+        </p>
+        <p>
+          You can request access to or deletion of your data anytime by
+          emailing Manager@middlemanmerchants.com.
+        </p>
+      </div>
+    </main>
+  );
+}
+```
+
+Create `src/app/(marketing)/terms/page.tsx`:
+```tsx
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Terms of Service — The Sweet Shop",
+  description: "The terms that govern orders, subscriptions, shipping, and rewards at The Sweet Shop.",
+};
+
+export default function Terms() {
+  return (
+    <main className="mx-auto max-w-3xl px-4 py-16">
+      <h1 className="text-3xl font-bold">Terms of Service</h1>
+      <div className="mt-6 space-y-4 text-muted-foreground">
+        <p>Orders are processed and paid for via Stripe. All prices are in USD.</p>
+        <p>
+          Subscriptions bill monthly and you can cancel anytime from your
+          account page. We don&apos;t offer partial-month refunds.
+        </p>
+        <p>
+          We currently ship domestically within the U.S. only, and can&apos;t
+          guarantee an exact delivery date.
+        </p>
+        <p>
+          Due to the nature of food products, we don&apos;t accept returns —
+          but contact us if there&apos;s a problem with your order and
+          we&apos;ll make it right.
+        </p>
+        <p>
+          Rewards points and referral credits have no cash value and may
+          change over time. Abuse of the rewards or referral program,
+          including self-referral or fake accounts, forfeits those rewards.
+        </p>
+      </div>
     </main>
   );
 }
@@ -484,13 +834,13 @@ export default function Contact() {
 - [ ] **Step 4: Run to verify it passes**
 
 Run: `npx playwright test tests/e2e/marketing-pages.spec.ts`
-Expected: PASS (4 tests)
+Expected: PASS (9 tests)
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add -A
-git commit -m "feat: add marketing pages with real Sweet Shop copy"
+git commit -m "feat: add all nine marketing pages with real Sweet Shop copy and SEO metadata"
 ```
 
 ---

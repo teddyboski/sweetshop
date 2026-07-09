@@ -27,6 +27,14 @@ Milestones 2–9 as each builds out its own pages within this structure.
 
 ```
 (marketing)   /  /about  /faq  /contact
+              /build-a-box     (marketing explainer — distinct from the
+                                 functional /shop/build-a-box picker,
+                                 CTAs forward-reference it ahead of Milestone 4)
+              /subscriptions   (marketing explainer — CTAs to /shop until
+                                 Milestone 6 ships real subscription checkout)
+              /how-it-works
+              /privacy
+              /terms
 
 (auth)        /login  /signup  /forgot-password  /reset-password
 
@@ -120,6 +128,7 @@ independently — route groups don't auto-share layouts across siblings.
 - **Data required:** None — static content
 - **Auth requirement:** None
 - **Future expansion:** Per-campaign landing pages, blog/content marketing, embedded Whatnot schedule, creator/influencer landing pages
+- **Full page set (per `docs/superpowers/specs/2026-07-08-marketing-pages-design.md`):** Home, About, Build A Box, Subscription Boxes, How It Works, Contact, FAQ, Privacy Policy, Terms — 9 pages total, each with its own business objective, primary CTA, and SEO metadata documented in that spec.
 
 ### `(auth)`
 - **Primary user:** Anonymous visitor signing up, or existing user logging back in
