@@ -29,7 +29,7 @@
 --      defense-in-depth backstop for authenticated carts, not the primary
 --      access path.
 
-create extension if not exists "pgcrypto";
+create extension if not exists pgcrypto with schema extensions;
 
 -- =========================================================================
 -- profiles
@@ -41,7 +41,7 @@ create table public.profiles (
   role text not null default 'customer' check (role in ('customer', 'admin')),
   stripe_customer_id text,
   rewards_points integer not null default 0,
-  referral_code text unique not null default encode(gen_random_bytes(6), 'hex'),
+  referral_code text unique not null default encode(extensions.gen_random_bytes(6), 'hex'),
   referred_by uuid references public.profiles(id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
