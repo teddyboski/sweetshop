@@ -9,9 +9,6 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: "jsdom",
-    environmentMatchGlobs: [
-      ["tests/integration/**", "node"],
-    ],
     include: ["tests/unit/**/*.test.ts", "tests/unit/**/*.test.tsx", "tests/integration/**/*.test.ts"],
     globals: true,
   },
