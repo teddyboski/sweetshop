@@ -44,7 +44,7 @@ Five open items from the blueprint review are not blocking the roadmap — each 
 **Features:**
 - Next.js App Router scaffold with route groups: `(marketing)`, `(auth)`, `(shop)`, `(account)`, `(admin)`
 - Tailwind + shadcn/ui installed, base design tokens set
-- Supabase project (local + staging), initial migration with full V1 schema: `users`, `boxes`, `box_items`, `snacks`, `order_items`, `orders`, `subscriptions`, `rewards_ledger`, `referrals`, `drops`, `promotions`, `customer_preferences`, `customer_lifetime_value` (view), `inventory_events`, `customer_activity`, `audit_logs`, `legacy_orders`
+- Supabase project (local + staging), initial migration with full V1 schema (as actually implemented, Milestone 1 self-review 2026-07-16): `profiles` (not `users` -- pairs with `auth.users`, standard Supabase pattern), `customer_preferences`, `customer_addresses`, `boxes`, `snacks`, `product_images`, `box_items`, `inventory`, `inventory_events`, `carts`, `cart_items`, `cart_item_snacks`, `orders`, `order_items`, `order_item_snacks`, `subscriptions`, `rewards_ledger`, `referrals`, `drops`, `promotions`, `customer_activity`, `audit_logs`, `legacy_orders`, `stripe_events`, `customer_lifetime_value` (view). Extra tables beyond the original plan (carts/cart_items/cart_item_snacks, product_images, inventory, stripe_events, customer_addresses) were added during implementation as reasonable real-world additions; reviewed and accepted as-is by project owner.
 - RLS enabled on every table, default-deny, verified by test
 - `src/types/supabase.ts` generated
 - Env vars wired (Supabase, Stripe placeholders, Resend, app URL), `vercel env pull` documented
