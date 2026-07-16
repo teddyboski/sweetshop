@@ -46,7 +46,7 @@ export async function PATCH(
 
   if (callerError || callerProfile?.role !== "admin") {
     return NextResponse.json(
-      { data: null, error: "Forbidden — admin role required" },
+      { data: null, error: "Forbidden - admin role required" },
       { status: 403 }
     );
   }

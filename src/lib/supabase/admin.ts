@@ -4,7 +4,7 @@ import type { Database } from "@/types/supabase";
 
 /**
  * Bypasses RLS via the service_role key. Use only for trusted server-side
- * operations (audit logging, admin mutations, seed scripts) — never expose
+ * operations (audit logging, admin mutations, seed scripts) - never expose
  * this client or its key to the browser.
  */
 export function createAdminSupabaseClient() {
