@@ -45,3 +45,6 @@ next-env.d.ts
 # repo-specific
 .claude/worktrees/
 supabase/.temp/
+
+.vercel
+.env*
