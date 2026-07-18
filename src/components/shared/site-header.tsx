@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AuthNavLink } from "@/components/shared/auth-nav-link";
 
 export function SiteHeader() {
   return (
@@ -11,7 +12,7 @@ export function SiteHeader() {
           <Link href="/shop">Shop</Link>
           <Link href="/about">About</Link>
           <Link href="/faq">FAQ</Link>
-          <Link href="/login">Log in</Link>
+          <AuthNavLink />
         </nav>
       </div>
     </header>
