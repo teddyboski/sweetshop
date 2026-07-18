@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -18,17 +19,16 @@ export default function SignupPage() {
     setError(null);
     setLoading(true);
 
-    const res = await fetch("/api/auth/signup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+    const supabase = createBrowserSupabaseClient();
+    const { error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
     });
-    const body = await res.json();
 
     setLoading(false);
 
-    if (!res.ok) {
-      setError(body.error ?? "Something went wrong");
+    if (signUpError) {
+      setError(signUpError.message);
       return;
     }
 

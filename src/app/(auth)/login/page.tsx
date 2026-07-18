@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 function LoginForm() {
   const router = useRouter();
@@ -19,22 +20,22 @@ function LoginForm() {
     setError(null);
     setLoading(true);
 
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+    const supabase = createBrowserSupabaseClient();
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
     });
-    const body = await res.json();
 
     setLoading(false);
 
-    if (!res.ok) {
-      setError(body.error ?? "Something went wrong");
+    if (signInError) {
+      setError("Invalid email or password");
       return;
     }
 
     const redirect = searchParams.get("redirect") ?? "/account";
     router.push(redirect);
+    router.refresh();
   }
 
   return (
