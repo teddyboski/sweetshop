@@ -4,7 +4,7 @@ import type { Database } from "@/types/supabase";
 
 const AUTH_ROUTES = ["/login", "/signup", "/forgot-password", "/reset-password"];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient<Database>(
