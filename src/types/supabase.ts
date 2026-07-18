@@ -657,6 +657,7 @@ export type Database = {
         Row: {
           created_at: string
           deleted_at: string | null
+          guest_email: string | null
           id: string
           shipping_address: Json | null
           status: string
@@ -665,11 +666,12 @@ export type Database = {
           total_amount_cents: number
           tracking_number: string | null
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
           deleted_at?: string | null
+          guest_email?: string | null
           id?: string
           shipping_address?: Json | null
           status?: string
@@ -678,11 +680,12 @@ export type Database = {
           total_amount_cents?: number
           tracking_number?: string | null
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
           deleted_at?: string | null
+          guest_email?: string | null
           id?: string
           shipping_address?: Json | null
           status?: string
@@ -691,7 +694,7 @@ export type Database = {
           total_amount_cents?: number
           tracking_number?: string | null
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
