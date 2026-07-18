@@ -2,13 +2,12 @@ import { test, expect } from "@playwright/test";
 
 // "/" is intentionally excluded here: Task 4 replaced its placeholder
 // heading with real content ("Snacks that hit different."), already
-// covered by tests/e2e/marketing-pages.spec.ts. The remaining three are
-// still real placeholders awaiting their own milestones (3, 7, 8).
-const routes: Array<[string, string]> = [
-  ["/shop", "Shop Placeholder"],
-  ["/account", "Account Placeholder"],
-  ["/admin", "Admin Placeholder"],
-];
+// covered by tests/e2e/marketing-pages.spec.ts.
+// "/account" and "/admin" are intentionally excluded here as of Milestone
+// 2 Task 5: they are now protected by proxy.ts and redirect unauthenticated
+// visitors to /login before their placeholder content would render.
+// That redirect behavior is covered by tests/e2e/middleware.spec.ts.
+const routes: Array<[string, string]> = [["/shop", "Shop Placeholder"]];
 
 for (const [path, expectedText] of routes) {
   test(`${path} renders its placeholder heading`, async ({ page }) => {
