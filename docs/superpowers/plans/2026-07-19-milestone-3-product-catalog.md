@@ -67,6 +67,17 @@ test reading the rendered `<head>` — same outcome, no new CI dependency. If
 you'd rather have real Lighthouse CI wired in, say so and I'll add it as a
 follow-up task.
 
+**6. Catalog page ISR vs. filtering.** Next.js opts a page into dynamic,
+per-request rendering the moment it reads `searchParams` server-side —
+there's no clean way to keep a filterable catalog page fully static. The
+roadmap's ISR completion criterion ("editing a box's price ... reflected
+within 60s") targets the box/snack *detail* pages (Task 7), not the catalog
+list. So: the catalog page still declares `revalidate = 60`, which governs
+its unfiltered base view; the moment a request includes `?category=`,
+`?tag=`, or `?q=`, that request renders dynamically (fresh data, no 60s
+lag) — which is strictly better for a filtered/search view anyway, not a
+regression.
+
 **5. Drop demo data.** No `drops` row exists yet (table is empty post-Milestone-1).
 Task 3 seeds two: one active (within `starts_at`/`ends_at`, `quantity_limit`
 not yet reached) and one sold-out (`units_sold >= quantity_limit`), both
@@ -147,11 +158,26 @@ exempted per the same section — their "test" is `supabase db push` /
   copy constraint.
 - `not-found.tsx` for invalid/non-active slug.
 - **Test:** E2E — visiting `/shop/box/munchie-box` renders title/price/
-  disclaimer; visiting a nonexistent slug renders the 404 page; **ISR
-  proof** — updating `price_cents` directly in the DB is reflected on the
-  page within 60s (per roadmap completion criterion), tested by fetching
-  twice with a controlled `revalidate` wait or by asserting the
-  `Cache-Control`/revalidate header in a lighter integration-style check.
+  disclaimer; visiting a nonexistent slug renders the 404 page.
+- **ISR proof is a manual verification step, not an automated test.**
+  `playwright.config.ts`'s `webServer` runs `npm run dev`, and Next.js
+  `revalidate` has no effect in dev mode (dev always renders fresh on every
+  request) - an automated test against the dev server would pass whether or
+  not ISR is wired correctly, which is worse than no test. To actually prove
+  the roadmap's "price change reflected within 60s" criterion:
+  1. `npm run build && npm run start` (production mode, ISR active)
+  2. Load `/shop/box/munchie-box`, note the price
+  3. Update `boxes.price_cents` for that row directly in Supabase
+  4. Reload before 60s - old (cached) price still shows
+  5. Reload after 60s - new price shows, proving the revalidate window works
+
+**Also confirmed during testing:** visiting a nonexistent box/snack slug
+correctly renders the `(shop)/not-found.tsx` content in dev mode, but the
+HTTP response status logs as 200, not 404 - a known Next.js/Turbopack dev
+server gap (`notFound()`'s status doesn't always propagate correctly before
+dev mode's Turbopack starts streaming). E2E tests assert the rendered
+content only; the real 404 status should be spot-checked once against a
+production build (step 1 above covers both checks in the same session).
 
 ### Task 8 — Snack detail page (`/shop/snack/[slug]`)
 - `src/app/(shop)/shop/snack/[slug]/page.tsx`, same ISR/metadata pattern.
