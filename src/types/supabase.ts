@@ -104,6 +104,7 @@ export type Database = {
           id: string
           is_subscription: boolean
           price_cents: number
+          search_vector: unknown
           slot_count: number | null
           slug: string
           status: string
@@ -119,6 +120,7 @@ export type Database = {
           id?: string
           is_subscription?: boolean
           price_cents: number
+          search_vector?: unknown
           slot_count?: number | null
           slug: string
           status?: string
@@ -134,6 +136,7 @@ export type Database = {
           id?: string
           is_subscription?: boolean
           price_cents?: number
+          search_vector?: unknown
           slot_count?: number | null
           slug?: string
           status?: string
@@ -932,6 +935,7 @@ export type Database = {
           name: string
           nutrition_json: Json | null
           price_cents: number | null
+          search_vector: unknown
           slug: string
           tags: string[]
           updated_at: string
@@ -946,6 +950,7 @@ export type Database = {
           name: string
           nutrition_json?: Json | null
           price_cents?: number | null
+          search_vector?: unknown
           slug: string
           tags?: string[]
           updated_at?: string
@@ -960,6 +965,7 @@ export type Database = {
           name?: string
           nutrition_json?: Json | null
           price_cents?: number | null
+          search_vector?: unknown
           slug?: string
           tags?: string[]
           updated_at?: string

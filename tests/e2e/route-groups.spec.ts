@@ -7,7 +7,9 @@ import { test, expect } from "@playwright/test";
 // 2 Task 5: they are now protected by proxy.ts and redirect unauthenticated
 // visitors to /login before their placeholder content would render.
 // That redirect behavior is covered by tests/e2e/middleware.spec.ts.
-const routes: Array<[string, string]> = [["/shop", "Shop Placeholder"]];
+// "/shop" is now excluded too, as of Milestone 3 Task 6: it has real
+// catalog content, covered by tests/e2e/catalog.spec.ts.
+const routes: Array<[string, string]> = [];
 
 for (const [path, expectedText] of routes) {
   test(`${path} renders its placeholder heading`, async ({ page }) => {
