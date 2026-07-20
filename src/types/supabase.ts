@@ -1061,7 +1061,16 @@ export type Database = {
       }
     }
     Functions: {
+      increment_drop_units_sold: {
+        Args: { p_drop_id: string; p_qty: number }
+        Returns: boolean
+      }
       is_admin: { Args: never; Returns: boolean }
+      release_inventory_for_cart: {
+        Args: { p_cart_id: string }
+        Returns: undefined
+      }
+      reserve_inventory_for_cart: { Args: { p_cart_id: string }; Returns: Json }
     }
     Enums: {
       [_ in never]: never
