@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/supabase";
-import { addBuildABoxToCartSchema } from "@/lib/validations/cart";
+import { addToCartSchema } from "@/lib/validations/cart";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-
-const ANONYMOUS_CART_COOKIE = "anonymous_cart_id";
+import { resolveCartId, ANONYMOUS_CART_COOKIE } from "@/lib/cart/resolve-cart";
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
-  const parsed = addBuildABoxToCartSchema.safeParse(body);
+  const parsed = addToCartSchema.safeParse(body);
 
   if (!parsed.success) {
     return NextResponse.json(
@@ -19,74 +16,32 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminSupabaseClient();
 
-  // 1. Re-fetch the box server-side - never trust a client-supplied slot
-  // count or box_type. See Milestone 4 plan, Product Decision #4.
-  const { data: box, error: boxError } = await admin
-    .from("boxes")
-    .select("id, box_type, slot_count, status")
-    .eq("slug", parsed.data.boxSlug)
-    .maybeSingle();
+  const itemResult =
+    parsed.data.itemType === "build_a_box"
+      ? await prepareBuildABoxItem(admin, parsed.data)
+      : parsed.data.itemType === "box"
+        ? await prepareBoxItem(admin, parsed.data)
+        : await prepareSnackItem(admin, parsed.data);
 
-  if (boxError) {
-    return NextResponse.json({ data: null, error: { message: boxError.message } }, { status: 500 });
-  }
-  if (!box || box.status !== "active") {
-    return NextResponse.json({ data: null, error: { message: "Box not found" } }, { status: 404 });
-  }
-  if (box.box_type !== "build_a_box") {
-    return NextResponse.json(
-      { data: null, error: { message: "This box does not accept a custom snack selection" } },
-      { status: 400 }
-    );
+  if (itemResult.error) {
+    return NextResponse.json({ data: null, error: { message: itemResult.error } }, { status: itemResult.status! });
   }
 
-  const submittedTotal = parsed.data.snacks.reduce((sum, s) => sum + s.quantity, 0);
-  if (submittedTotal !== box.slot_count) {
-    return NextResponse.json(
-      {
-        data: null,
-        error: { message: `This box requires exactly ${box.slot_count} items, received ${submittedTotal}` },
-      },
-      { status: 400 }
-    );
-  }
-
-  // 2. Every submitted snack must actually be BYO-eligible.
-  const snackIds = parsed.data.snacks.map((s) => s.snackId);
-  const { data: snacks, error: snacksError } = await admin
-    .from("snacks")
-    .select("id, is_byo_eligible")
-    .in("id", snackIds);
-
-  if (snacksError) {
-    return NextResponse.json({ data: null, error: { message: snacksError.message } }, { status: 500 });
-  }
-  if (!snacks || snacks.length !== snackIds.length || snacks.some((s) => !s.is_byo_eligible)) {
-    return NextResponse.json(
-      { data: null, error: { message: "One or more snacks are not eligible for Build-a-Box" } },
-      { status: 400 }
-    );
-  }
-
-  // 3. Resolve the caller's cart. Auth is via an optional bearer token (per
-  // the mobile-readiness constraint - matches auth/reset-password's
-  // pattern), never assumed from a browser cookie session. No token means
-  // guest/anonymous, resolved via a request/response-bound cookie instead
-  // of next/headers' cookies() (which needs Next's request-scoped async
-  // context - not available when a Route Handler is invoked directly in a
-  // test, unlike NextRequest/NextResponse's own cookie jars).
-  let newAnonymousCookie: string | null = null;
   const cartResult = await resolveCartId(request, admin);
   if (cartResult.error) {
     return NextResponse.json({ data: null, error: { message: cartResult.error } }, { status: cartResult.status! });
   }
   const cartId = cartResult.cartId!;
-  newAnonymousCookie = cartResult.newAnonymousCookie ?? null;
 
-  // 4. Insert the cart_items row, then the cart_item_snacks rows.
   const { data: cartItem, error: cartItemError } = await admin
     .from("cart_items")
-    .insert({ cart_id: cartId, item_type: "box", box_id: box.id, quantity: 1 })
+    .insert({
+      cart_id: cartId,
+      item_type: itemResult.snackId ? "snack" : "box",
+      box_id: itemResult.boxId ?? null,
+      snack_id: itemResult.snackId ?? null,
+      quantity: itemResult.quantity!,
+    })
     .select("id")
     .single();
 
@@ -94,22 +49,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data: null, error: { message: "Could not add item to cart" } }, { status: 500 });
   }
 
-  const { error: snackRowsError } = await admin.from("cart_item_snacks").insert(
-    parsed.data.snacks.map((s) => ({
-      cart_item_id: cartItem.id,
-      snack_id: s.snackId,
-      quantity: s.quantity,
-    }))
-  );
+  if (itemResult.snackSelections) {
+    const { error: snackRowsError } = await admin.from("cart_item_snacks").insert(
+      itemResult.snackSelections.map((s) => ({
+        cart_item_id: cartItem.id,
+        snack_id: s.snackId,
+        quantity: s.quantity,
+      }))
+    );
 
-  if (snackRowsError) {
-    return NextResponse.json({ data: null, error: { message: "Could not save snack selection" } }, { status: 500 });
+    if (snackRowsError) {
+      return NextResponse.json({ data: null, error: { message: "Could not save snack selection" } }, { status: 500 });
+    }
   }
 
   const response = NextResponse.json({ data: { cartItemId: cartItem.id }, error: null }, { status: 201 });
 
-  if (newAnonymousCookie) {
-    response.cookies.set(ANONYMOUS_CART_COOKIE, newAnonymousCookie, {
+  if (cartResult.newAnonymousCookie) {
+    response.cookies.set(ANONYMOUS_CART_COOKIE, cartResult.newAnonymousCookie, {
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
@@ -121,66 +78,83 @@ export async function POST(request: NextRequest) {
   return response;
 }
 
-interface CartResolution {
-  cartId?: string;
-  newAnonymousCookie?: string;
+interface PreparedItem {
+  boxId?: string;
+  snackId?: string;
+  quantity?: number;
+  snackSelections?: Array<{ snackId: string; quantity: number }>;
   error?: string;
   status?: number;
 }
 
-async function resolveCartId(
-  request: NextRequest,
-  admin: ReturnType<typeof createAdminSupabaseClient>
-): Promise<CartResolution> {
-  const authHeader = request.headers.get("authorization");
-  const token = authHeader?.match(/^Bearer (.+)$/)?.[1];
+async function prepareBuildABoxItem(
+  admin: ReturnType<typeof createAdminSupabaseClient>,
+  data: Extract<import("@/lib/validations/cart").AddToCartInput, { itemType: "build_a_box" }>
+): Promise<PreparedItem> {
+  // Never trust a client-supplied slot count or box_type. See Milestone 4
+  // plan, Product Decision #4.
+  const { data: box, error: boxError } = await admin
+    .from("boxes")
+    .select("id, box_type, slot_count, status")
+    .eq("slug", data.boxSlug)
+    .maybeSingle();
 
-  if (token) {
-    const anonClient = createClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
-    );
-    const {
-      data: { user },
-    } = await anonClient.auth.getUser();
-
-    if (!user) {
-      return { error: "Invalid or expired session", status: 401 };
-    }
-
-    const { data: existingCart } = await admin
-      .from("carts")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .maybeSingle();
-    if (existingCart) return { cartId: existingCart.id };
-
-    const { data: newCart, error } = await admin.from("carts").insert({ user_id: user.id }).select("id").single();
-    if (error || !newCart) return { error: "Could not create cart", status: 500 };
-    return { cartId: newCart.id };
+  if (boxError) return { error: boxError.message, status: 500 };
+  if (!box || box.status !== "active") return { error: "Box not found", status: 404 };
+  if (box.box_type !== "build_a_box") {
+    return { error: "This box does not accept a custom snack selection", status: 400 };
   }
 
-  const existingAnonymousId = request.cookies.get(ANONYMOUS_CART_COOKIE)?.value;
-
-  if (existingAnonymousId) {
-    const { data: existingCart } = await admin
-      .from("carts")
-      .select("id")
-      .eq("anonymous_id", existingAnonymousId)
-      .eq("status", "active")
-      .maybeSingle();
-    if (existingCart) return { cartId: existingCart.id };
+  const submittedTotal = data.snacks.reduce((sum, s) => sum + s.quantity, 0);
+  if (submittedTotal !== box.slot_count) {
+    return {
+      error: `This box requires exactly ${box.slot_count} items, received ${submittedTotal}`,
+      status: 400,
+    };
   }
 
-  const newAnonymousId = crypto.randomUUID();
-  const { data: newCart, error } = await admin
-    .from("carts")
-    .insert({ anonymous_id: newAnonymousId })
-    .select("id")
-    .single();
-  if (error || !newCart) return { error: "Could not create cart", status: 500 };
+  const snackIds = data.snacks.map((s) => s.snackId);
+  const { data: snacks, error: snacksError } = await admin
+    .from("snacks")
+    .select("id, is_byo_eligible")
+    .in("id", snackIds);
 
-  return { cartId: newCart.id, newAnonymousCookie: newAnonymousId };
+  if (snacksError) return { error: snacksError.message, status: 500 };
+  if (!snacks || snacks.length !== snackIds.length || snacks.some((s) => !s.is_byo_eligible)) {
+    return { error: "One or more snacks are not eligible for Build-a-Box", status: 400 };
+  }
+
+  return { boxId: box.id, quantity: 1, snackSelections: data.snacks };
+}
+
+async function prepareBoxItem(
+  admin: ReturnType<typeof createAdminSupabaseClient>,
+  data: Extract<import("@/lib/validations/cart").AddToCartInput, { itemType: "box" }>
+): Promise<PreparedItem> {
+  const { data: box, error } = await admin
+    .from("boxes")
+    .select("id, status")
+    .eq("slug", data.boxSlug)
+    .maybeSingle();
+
+  if (error) return { error: error.message, status: 500 };
+  if (!box || box.status !== "active") return { error: "Box not found", status: 404 };
+
+  return { boxId: box.id, quantity: data.quantity };
+}
+
+async function prepareSnackItem(
+  admin: ReturnType<typeof createAdminSupabaseClient>,
+  data: Extract<import("@/lib/validations/cart").AddToCartInput, { itemType: "snack" }>
+): Promise<PreparedItem> {
+  const { data: snack, error } = await admin
+    .from("snacks")
+    .select("id, is_sellable_individually")
+    .eq("id", data.snackId)
+    .maybeSingle();
+
+  if (error) return { error: error.message, status: 500 };
+  if (!snack || !snack.is_sellable_individually) return { error: "Snack not found", status: 404 };
+
+  return { snackId: snack.id, quantity: data.quantity };
 }
