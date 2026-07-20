@@ -36,7 +36,14 @@ test("signup shows a check-your-email confirmation instead of an immediate sessi
 // endpoints. Playwright's default parallel workers were sending simultaneous
 // auth requests to the same rate-limited free-tier project, causing tests
 // that pass individually to fail nondeterministically when run together.
-// Serial execution avoids the concurrent-load collision.
+// Serial execution avoids that *intra-file* concurrent-load collision, and
+// was verified fixed (confirmed via `-g "login"`, passes reliably, no other
+// spec file touches Supabase Auth so it's not a cross-file race). What
+// serial mode can't fix: cumulative rate-limiting from total request volume
+// across an entire day of live testing - if the full suite runs this test
+// during one of those windows, it can still fail even in isolation. That's
+// an inherent limit of testing against a live, shared, free-tier Auth
+// backend, not a bug - same root cause as the email-quota note above.
 test.describe(() => {
   test.describe.configure({ mode: "serial" });
 

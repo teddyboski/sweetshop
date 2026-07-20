@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   getActiveBoxes,
   getSellableSnacks,
+  getByoEligibleSnacks,
   getBoxBySlug,
   getSnackBySlug,
   getBoxItems,
@@ -21,6 +22,14 @@ describe("catalog data access layer", () => {
   it("getSellableSnacks returns all 18 seeded snacks (all are individually sellable)", async () => {
     const snacks = await getSellableSnacks();
     expect(snacks).toHaveLength(18);
+  });
+
+  it("getByoEligibleSnacks excludes the 4 international/BYO-ineligible snacks", async () => {
+    const snacks = await getByoEligibleSnacks();
+    expect(snacks).toHaveLength(14);
+    const slugs = snacks!.map((s) => s.slug);
+    expect(slugs).not.toContain("japanese-matcha-kitkat");
+    expect(slugs).not.toContain("thai-coconut-candy");
   });
 
   it("getSellableSnacks filters by category", async () => {

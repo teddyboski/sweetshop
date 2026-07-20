@@ -27,6 +27,17 @@ export async function getSellableSnacks(filters: { category?: string; tag?: stri
   return data;
 }
 
+export async function getByoEligibleSnacks() {
+  const supabase = createPublicSupabaseClient();
+  const { data, error } = await supabase
+    .from("snacks")
+    .select("id, slug, name, brand, category, tags, price_cents")
+    .eq("is_byo_eligible", true)
+    .order("name");
+  if (error) throw error;
+  return data;
+}
+
 export async function getBoxBySlug(slug: string) {
   const supabase = createPublicSupabaseClient();
   const { data, error } = await supabase
