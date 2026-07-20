@@ -8,6 +8,8 @@ const admin = createAdminSupabaseClient();
 
 let byoSnackIds: string[];
 let nonByoSnackId: string;
+let sellableSnackId: string;
+let nonSellableSnackId: string | null;
 const createdCartIds: string[] = [];
 
 beforeAll(async () => {
@@ -25,6 +27,22 @@ beforeAll(async () => {
     .limit(1)
     .single();
   nonByoSnackId = nonByoSnack!.id;
+
+  const { data: sellableSnack } = await admin
+    .from("snacks")
+    .select("id")
+    .eq("is_sellable_individually", true)
+    .limit(1)
+    .single();
+  sellableSnackId = sellableSnack!.id;
+
+  const { data: nonSellableSnack } = await admin
+    .from("snacks")
+    .select("id")
+    .eq("is_sellable_individually", false)
+    .limit(1)
+    .maybeSingle();
+  nonSellableSnackId = nonSellableSnack?.id ?? null;
 });
 
 afterEach(async () => {
@@ -51,9 +69,10 @@ async function findCreatedCartId(): Promise<string | null> {
   return data?.id ?? null;
 }
 
-describe("POST /api/cart/items", () => {
+describe("POST /api/cart/items - build_a_box", () => {
   it("creates a cart_items row and matching cart_item_snacks for a valid 8-item Small submission", async () => {
     const request = makeRequest({
+      itemType: "build_a_box",
       boxSlug: "build-a-box-small",
       snacks: byoSnackIds.map((snackId) => ({ snackId, quantity: 1 })),
     });
@@ -82,6 +101,7 @@ describe("POST /api/cart/items", () => {
 
   it("rejects a submission with the wrong item count for the box size", async () => {
     const request = makeRequest({
+      itemType: "build_a_box",
       boxSlug: "build-a-box-small",
       snacks: byoSnackIds.slice(0, 7).map((snackId) => ({ snackId, quantity: 1 })),
     });
@@ -95,6 +115,7 @@ describe("POST /api/cart/items", () => {
 
   it("rejects a submission containing a BYO-ineligible snack", async () => {
     const request = makeRequest({
+      itemType: "build_a_box",
       boxSlug: "build-a-box-small",
       snacks: [
         ...byoSnackIds.slice(0, 7).map((snackId) => ({ snackId, quantity: 1 })),
@@ -111,6 +132,7 @@ describe("POST /api/cart/items", () => {
 
   it("rejects an unknown box slug", async () => {
     const request = makeRequest({
+      itemType: "build_a_box",
       boxSlug: "does-not-exist",
       snacks: [{ snackId: byoSnackIds[0], quantity: 8 }],
     });
@@ -122,6 +144,7 @@ describe("POST /api/cart/items", () => {
   it("sets an anonymous_cart_id cookie on first submission, reuses the same cart on the next", async () => {
     const first = await POST(
       makeRequest({
+        itemType: "build_a_box",
         boxSlug: "build-a-box-small",
         snacks: byoSnackIds.map((snackId) => ({ snackId, quantity: 1 })),
       })
@@ -143,6 +166,7 @@ describe("POST /api/cart/items", () => {
       method: "POST",
       headers: { cookie: `anonymous_cart_id=${cookieValue}` },
       body: JSON.stringify({
+        itemType: "build_a_box",
         boxSlug: "build-a-box-small",
         snacks: byoSnackIds.map((snackId) => ({ snackId, quantity: 1 })),
       }),
@@ -157,5 +181,54 @@ describe("POST /api/cart/items", () => {
       .single();
 
     expect(secondCartItem!.cart_id).toBe(firstCartItem!.cart_id);
+  });
+});
+
+describe("POST /api/cart/items - box", () => {
+  it("creates a cart_items row for a valid curated box", async () => {
+    const request = makeRequest({ itemType: "box", boxSlug: "munchie-box", quantity: 2 });
+    const response = await POST(request);
+    const body = await response.json();
+    expect(response.status).toBe(201);
+
+    const { data: cartItem } = await admin
+      .from("cart_items")
+      .select("cart_id, item_type, quantity, snack_id")
+      .eq("id", body.data.cartItemId)
+      .single();
+    expect(cartItem!.item_type).toBe("box");
+    expect(cartItem!.quantity).toBe(2);
+    expect(cartItem!.snack_id).toBeNull();
+    createdCartIds.push(cartItem!.cart_id);
+  });
+
+  it("rejects an unknown box slug", async () => {
+    const response = await POST(makeRequest({ itemType: "box", boxSlug: "does-not-exist", quantity: 1 }));
+    expect(response.status).toBe(404);
+  });
+});
+
+describe("POST /api/cart/items - snack", () => {
+  it("creates a cart_items row for a valid individually-sellable snack", async () => {
+    const request = makeRequest({ itemType: "snack", snackId: sellableSnackId, quantity: 3 });
+    const response = await POST(request);
+    const body = await response.json();
+    expect(response.status).toBe(201);
+
+    const { data: cartItem } = await admin
+      .from("cart_items")
+      .select("cart_id, item_type, quantity, box_id")
+      .eq("id", body.data.cartItemId)
+      .single();
+    expect(cartItem!.item_type).toBe("snack");
+    expect(cartItem!.quantity).toBe(3);
+    expect(cartItem!.box_id).toBeNull();
+    createdCartIds.push(cartItem!.cart_id);
+  });
+
+  it("rejects a snack that isn't individually sellable, if the current seed has one", async () => {
+    if (!nonSellableSnackId) return;
+    const response = await POST(makeRequest({ itemType: "snack", snackId: nonSellableSnackId, quantity: 1 }));
+    expect(response.status).toBe(404);
   });
 });

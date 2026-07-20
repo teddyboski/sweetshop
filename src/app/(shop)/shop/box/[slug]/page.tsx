@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getBoxBySlug, getBoxItems } from "@/lib/supabase/queries/catalog";
 import { formatPriceCents } from "@/lib/utils";
 import { ProductImage } from "@/components/shared/product-image";
+import { AddToCartButton } from "@/components/features/cart/add-to-cart-button";
 
 export const revalidate = 60;
 
@@ -40,10 +42,17 @@ export default async function BoxDetailPage({ params }: BoxDetailPageProps) {
           </p>
           {box.description && <p className="mt-4 text-muted-foreground">{box.description}</p>}
 
-          {box.box_type === "build_a_box" && (
-            <p className="mt-4 text-sm text-muted-foreground">
-              Pick exactly {box.slot_count} snacks to build this box.
-            </p>
+          {box.box_type === "build_a_box" ? (
+            <div className="mt-4">
+              <p className="text-sm text-muted-foreground">Pick exactly {box.slot_count} snacks to build this box.</p>
+              <Link href="/shop/build-a-box" className="mt-2 inline-block text-primary underline underline-offset-4">
+                Build this box
+              </Link>
+            </div>
+          ) : (
+            <div className="mt-4">
+              <AddToCartButton payload={{ itemType: "box", boxSlug: box.slug, quantity: 1 }} />
+            </div>
           )}
 
           {items.length > 0 && (

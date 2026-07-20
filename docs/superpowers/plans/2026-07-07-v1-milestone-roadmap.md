@@ -143,17 +143,31 @@ Five open items from the blueprint review are not blocking the roadmap — each 
 ## Milestone 5: Shopping Cart
 
 **Features:**
-- Cart state (Zustand, persisted to `localStorage` pre-auth, synced to the account post-auth)
+- Cart state is DB-backed via `carts`/`cart_items`/`cart_item_snacks`
+  (Milestone 1 schema) plus a server-generated `anonymous_id` in an httpOnly
+  cookie for guests, synced to `user_id` post-auth — **corrected
+  2026-07-20, supersedes this section's original "Zustand + localStorage"
+  phrasing.** Milestone 1's actual schema and Milestone 4's working
+  Build-a-Box cart-write path already built it this way: never
+  client-tamperable, survives across devices/browsers once authenticated,
+  doesn't depend on `localStorage`. Zustand's role is limited to ephemeral
+  UI-only state (e.g. a cart drawer's open/closed state), not cart
+  contents. See `docs/superpowers/plans/2026-07-20-milestone-5-shopping-cart.md`,
+  Product Decision #1.
 - Mixed-cart support: curated boxes + individual snacks + BYO boxes in one cart
 - Cart page: quantity adjust, remove, running total
-- **Resolves open decision #5:** shipping rule for snack-only carts (minimum order value or a shipping line item when no box is present)
+- **Resolves open decision #5** (approved 2026-07-20): a cart with **no box
+  item at all** (snack-only) requires a **$25 minimum order value**, or a
+  **flat $5 shipping fee** is added below that threshold. Carts containing
+  at least one box ship free, per CLAUDE.md's "shipping bundled into box
+  price."
 
 **Dependencies:** Milestone 3, Milestone 4
 
 **Completion criteria:**
 - Cart total is correct for a mixed cart (1 box + 2 loose snacks + 1 BYO box)
-- A snack-only cart under the resolved threshold either blocks checkout with a clear message or applies the resolved shipping fee — behavior matches whatever milestone 5's plan decides, no silent free-shipping loss
-- Cart persists across a page reload
+- A snack-only cart under $25 has a $5 shipping fee added; $25 and over ships free; any cart containing a box ships free regardless of total
+- Cart persists across a page reload (via the DB-backed anonymous cart cookie, not localStorage)
 
 **Suggested branch:** `milestone-5-shopping-cart`
 

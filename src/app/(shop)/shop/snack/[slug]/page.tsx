@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getSnackBySlug } from "@/lib/supabase/queries/catalog";
 import { formatPriceCents } from "@/lib/utils";
 import { ProductImage } from "@/components/shared/product-image";
+import { AddToCartButton } from "@/components/features/cart/add-to-cart-button";
 
 export const revalidate = 60;
 
@@ -51,6 +52,10 @@ export default async function SnackDetailPage({ params }: SnackDetailPageProps) 
               ))}
             </div>
           )}
+
+          <div className="mt-4">
+            <AddToCartButton payload={{ itemType: "snack", snackId: snack.id, quantity: 1 }} />
+          </div>
         </div>
       </div>
     </div>

@@ -51,6 +51,7 @@ export function BuildABoxPicker({ boxes, snacks }: BuildABoxPickerProps) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        itemType: "build_a_box",
         boxSlug: selectedBox.slug,
         snacks: Object.entries(selections).map(([snackId, quantity]) => ({ snackId, quantity })),
       }),
