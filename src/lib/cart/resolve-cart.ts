@@ -10,6 +10,7 @@ export const ANONYMOUS_CART_COOKIE = "anonymous_cart_id";
 
 export interface CartResolution {
   cartId?: string;
+  userId?: string;
   newAnonymousCookie?: string;
   error?: string;
   status?: number;
@@ -114,7 +115,7 @@ export async function resolveExistingCartId(
       .eq("user_id", user.id)
       .eq("status", "active")
       .maybeSingle();
-    return { cartId: existingCart?.id };
+    return { cartId: existingCart?.id, userId: user.id };
   }
 
   const existingAnonymousId = request.cookies.get(ANONYMOUS_CART_COOKIE)?.value;

@@ -10,6 +10,8 @@ export interface CartLine {
   slug: string | null;
   isBuildABox: boolean;
   slotCount: number | null;
+  isSubscription: boolean;
+  cadence: string | null;
   snackSelections?: Array<{ snackId: string; name: string; quantity: number }>;
 }
 
@@ -25,7 +27,7 @@ export async function getCartContents(cartId: string): Promise<CartContents> {
   const { data: items, error } = await admin
     .from("cart_items")
     .select(
-      "id, item_type, quantity, box_id, snack_id, boxes(title, slug, price_cents, box_type, slot_count), snacks(name, slug, price_cents)"
+      "id, item_type, quantity, box_id, snack_id, boxes(title, slug, price_cents, box_type, slot_count, is_subscription, cadence), snacks(name, slug, price_cents)"
     )
     .eq("cart_id", cartId)
     .order("created_at", { ascending: true });
@@ -61,6 +63,8 @@ export async function getCartContents(cartId: string): Promise<CartContents> {
         slug: item.boxes.slug,
         isBuildABox,
         slotCount: item.boxes.slot_count,
+        isSubscription: item.boxes.is_subscription,
+        cadence: item.boxes.cadence,
         snackSelections,
       });
     } else if (item.item_type === "snack" && item.snacks) {
@@ -73,6 +77,8 @@ export async function getCartContents(cartId: string): Promise<CartContents> {
         slug: item.snacks.slug,
         isBuildABox: false,
         slotCount: null,
+        isSubscription: false,
+        cadence: null,
       });
     }
   }

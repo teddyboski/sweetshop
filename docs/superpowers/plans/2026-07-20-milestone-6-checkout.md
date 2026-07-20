@@ -119,6 +119,26 @@ rewards only accrue on orders placed while already logged in. Simpler, and
 avoids any incentive to game guest-checkout-then-signup for backdated
 points.
 
+**8. Guest checkout is blocked when the cart contains the subscription box
+- approved 2026-07-20.** `subscriptions.user_id` is `not null` with no
+guest-email equivalent (unlike `orders`) - there is no schema-supported way
+to create a subscription for a guest, and no way for them to ever view,
+pause, or cancel it afterward (Milestone 7's job). `POST
+/api/checkout/session` returns `400` ("Please create an account to
+subscribe") when unauthenticated and any cart line is a subscription box.
+Guests can still buy one-time boxes and snacks normally; a cart mixing a
+subscription box with one-time items still requires an account for the
+whole checkout, since Stripe only supports one mode per session and the
+subscription line is what forces `mode: 'subscription'`.
+
+**9. Rewards earning rule: 1 point per dollar spent - approved
+2026-07-20.** `delta_points = floor(orders.total_amount_cents / 100)`,
+credited to `rewards_ledger` (and `profiles.rewards_points` cache updated
+in the same operation, per Milestone 1's schema note) inside the webhook's
+`checkout.session.completed` handling, for authenticated orders only (see
+Decision #7). Simple, standard, and easy to explain in the account UI
+later (Milestone 7).
+
 ---
 
 ## Tasks
