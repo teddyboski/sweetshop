@@ -82,7 +82,7 @@ export default function LoginPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Log in</CardTitle>
+        <CardTitle><h1 className="contents">Log in</h1></CardTitle>
       </CardHeader>
       <CardContent>
         <Suspense fallback={<p className="text-sm text-muted-foreground">Loading...</p>}>

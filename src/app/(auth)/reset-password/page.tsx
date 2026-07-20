@@ -37,7 +37,7 @@ export default function ResetPasswordPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Reset password</CardTitle>
+        <CardTitle><h1 className="contents">Reset password</h1></CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">

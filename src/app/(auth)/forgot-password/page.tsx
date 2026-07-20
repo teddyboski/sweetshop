@@ -28,7 +28,7 @@ export default function ForgotPasswordPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Forgot password</CardTitle>
+        <CardTitle><h1 className="contents">Forgot password</h1></CardTitle>
       </CardHeader>
       <CardContent>
         {message ? (
