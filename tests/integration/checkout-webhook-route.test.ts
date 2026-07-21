@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, beforeAll, afterEach, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
@@ -8,6 +8,24 @@ import { createStripeClient } from "@/lib/stripe/client";
 import { POST as postCartItem } from "@/app/api/cart/items/route";
 import { POST as postCheckoutSession } from "@/app/api/checkout/session/route";
 import { POST as postWebhook } from "@/app/api/webhooks/stripe/route";
+
+// Per the Milestone 6 plan (Task 4): the Resend call itself is
+// mocked/captured, not actually sent - real sends would (a) be rejected
+// outright for any recipient other than the Resend account's own owner
+// email, since the sandbox sender can't deliver elsewhere until a domain is
+// verified, and (b) slow every webhook test down with a real third-party
+// network call on every delivery, including the deliberate duplicate-
+// delivery assertions below. This does NOT mock Supabase or Stripe - both
+// still hit the real APIs, consistent with this repo's "never mock the
+// database" convention; Resend is the one deliberate, plan-approved
+// exception. vi.mock calls are hoisted above imports by Vitest's transform,
+// so this takes effect before the webhook route (which imports the Resend
+// client) is ever loaded.
+const { mockSend } = vi.hoisted(() => ({ mockSend: vi.fn() }));
+vi.mock("@/lib/resend/client", () => ({
+  createResendClient: () => ({ emails: { send: mockSend } }),
+  RESEND_FROM_EMAIL: "onboarding@resend.dev",
+}));
 
 // See rls-cross-user.test.ts's header comment: never call a session-mutating
 // auth method on the admin client itself - use a separate plain client to
@@ -54,6 +72,11 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (userId) await admin.auth.admin.deleteUser(userId);
+});
+
+beforeEach(() => {
+  mockSend.mockReset();
+  mockSend.mockResolvedValue({ data: { id: `email_test_${crypto.randomUUID()}` }, error: null });
 });
 
 afterEach(async () => {
@@ -194,7 +217,7 @@ describe("POST /api/webhooks/stripe", () => {
 
     const { data: order } = await admin
       .from("orders")
-      .select("id, status, total_amount_cents, user_id")
+      .select("id, status, total_amount_cents, user_id, confirmation_email_sent_at")
       .eq("stripe_checkout_session_id", checkoutBody.data.id)
       .single();
     expect(order).toBeTruthy();
@@ -202,6 +225,16 @@ describe("POST /api/webhooks/stripe", () => {
     expect(order!.status).toBe("paid");
     expect(order!.user_id).toBe(userId);
     expect(order!.total_amount_cents).toBe(realSession.amount_total);
+    expect(order!.confirmation_email_sent_at).toBeTruthy();
+
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: email,
+        subject: expect.stringContaining(order!.id.slice(0, 8)),
+        text: expect.stringContaining(`$${(realSession.amount_total! / 100).toFixed(2)}`),
+      })
+    );
 
     const { data: orderItems } = await admin.from("order_items").select("id").eq("order_id", order!.id);
     expect(orderItems).toHaveLength(2);
@@ -235,6 +268,74 @@ describe("POST /api/webhooks/stripe", () => {
 
     const { data: profileAfterRedelivery } = await admin.from("profiles").select("rewards_points").eq("id", userId).single();
     expect(profileAfterRedelivery!.rewards_points).toBe(profileAfter!.rewards_points);
+
+    // confirmation_email_sent_at was already set after the first delivery,
+    // so the redelivery's "order exists AND email already sent" branch
+    // should short-circuit before ever calling Resend again.
+    expect(mockSend).toHaveBeenCalledTimes(1);
+  }, 20000);
+
+  it("when the confirmation email fails to send, returns 500 without recreating the order, then a redelivery sends it without double-crediting rewards", async () => {
+    const response = await postCartItem(
+      cartItemRequest({ itemType: "snack", snackId: sellableSnackId, quantity: 1 }, { token: userToken })
+    );
+    expect(response.status).toBe(201);
+
+    const cartId = await cartIdForAuthenticatedUser();
+    createdCartIds.push(cartId);
+
+    const checkoutResponse = await postCheckoutSession(checkoutSessionRequest({}, { token: userToken }));
+    const checkoutBody = await checkoutResponse.json();
+    expect(checkoutResponse.status).toBe(201);
+
+    const realSession = await stripe.checkout.sessions.retrieve(checkoutBody.data.id);
+    const completedSession = { ...realSession, payment_intent: `pi_test_${crypto.randomUUID()}` };
+    const { payload, signature } = buildSignedEvent("checkout.session.completed", completedSession);
+
+    mockSend.mockResolvedValueOnce({ data: null, error: { message: "simulated Resend outage" } });
+
+    const firstResponse = await postWebhook(webhookRequest(payload, signature));
+    expect(firstResponse.status).toBe(500);
+
+    // Order creation itself doesn't depend on the email succeeding - it
+    // already committed before the email step ran.
+    const { data: orderAfterFailure } = await admin
+      .from("orders")
+      .select("id, confirmation_email_sent_at")
+      .eq("stripe_checkout_session_id", checkoutBody.data.id)
+      .single();
+    expect(orderAfterFailure).toBeTruthy();
+    createdOrderIds.push(orderAfterFailure!.id);
+    expect(orderAfterFailure!.confirmation_email_sent_at).toBeNull();
+
+    const { data: ledgerAfterFailure } = await admin
+      .from("rewards_ledger")
+      .select("id")
+      .eq("order_id", orderAfterFailure!.id);
+    expect(ledgerAfterFailure).toHaveLength(1);
+    expect(mockSend).toHaveBeenCalledTimes(1);
+
+    // Stripe redelivers on a non-2xx response - simulated here by POSTing
+    // the exact same signed payload again. mockSend now resolves
+    // successfully (beforeEach's default, since mockResolvedValueOnce only
+    // applied to the first call above).
+    const secondResponse = await postWebhook(webhookRequest(payload, signature));
+    expect(secondResponse.status).toBe(200);
+
+    const { data: orderAfterRetry } = await admin
+      .from("orders")
+      .select("id, confirmation_email_sent_at")
+      .eq("stripe_checkout_session_id", checkoutBody.data.id);
+    expect(orderAfterRetry).toHaveLength(1); // not recreated
+    expect(orderAfterRetry![0]!.confirmation_email_sent_at).toBeTruthy();
+
+    const { data: ledgerAfterRetry } = await admin
+      .from("rewards_ledger")
+      .select("id")
+      .eq("order_id", orderAfterFailure!.id);
+    expect(ledgerAfterRetry).toHaveLength(1); // not double-credited
+
+    expect(mockSend).toHaveBeenCalledTimes(2);
   }, 20000);
 
   it("processes checkout.session.completed for a subscription: creates a subscriptions row", async () => {
@@ -274,6 +375,42 @@ describe("POST /api/webhooks/stripe", () => {
     expect(subscription).toBeTruthy();
     expect(subscription!.status).toBe("active");
     createdSubscriptionIds.push(subscription!.id);
+  });
+
+  it("processes checkout.session.completed for a guest: emails the guest address directly and credits no rewards", async () => {
+    const response = await postCartItem(cartItemRequest({ itemType: "box", boxSlug: "munchie-box", quantity: 1 }));
+    const body = await response.json();
+    const cookieValue = response.headers.get("set-cookie")!.match(/anonymous_cart_id=([^;]+)/)![1];
+    const { data: cartItem } = await admin.from("cart_items").select("cart_id").eq("id", body.data.cartItemId).single();
+    createdCartIds.push(cartItem!.cart_id);
+
+    const guestEmail = `guest-webhook-${crypto.randomUUID()}@mailinator.com`;
+    const checkoutResponse = await postCheckoutSession(checkoutSessionRequest({ guestEmail }, { cookie: cookieValue }));
+    const checkoutBody = await checkoutResponse.json();
+    expect(checkoutResponse.status).toBe(201);
+
+    const realSession = await stripe.checkout.sessions.retrieve(checkoutBody.data.id);
+    const completedSession = { ...realSession, payment_intent: `pi_test_${crypto.randomUUID()}` };
+    const { payload, signature } = buildSignedEvent("checkout.session.completed", completedSession);
+
+    const webhookResponse = await postWebhook(webhookRequest(payload, signature));
+    expect(webhookResponse.status).toBe(200);
+
+    const { data: order } = await admin
+      .from("orders")
+      .select("id, user_id, guest_email, confirmation_email_sent_at")
+      .eq("stripe_checkout_session_id", checkoutBody.data.id)
+      .single();
+    createdOrderIds.push(order!.id);
+    expect(order!.user_id).toBeNull();
+    expect(order!.guest_email).toBe(guestEmail);
+    expect(order!.confirmation_email_sent_at).toBeTruthy();
+
+    expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ to: guestEmail }));
+
+    // Product Decision #7: rewards never accrue on guest orders.
+    const { data: ledgerRows } = await admin.from("rewards_ledger").select("id").eq("order_id", order!.id);
+    expect(ledgerRows).toHaveLength(0);
   });
 
   it("processes checkout.session.expired: releases reserved inventory back to its pre-checkout level", async () => {

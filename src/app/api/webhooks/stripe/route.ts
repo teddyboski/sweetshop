@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createStripeClient } from "@/lib/stripe/client";
+import { sendOrderConfirmationEmail } from "@/lib/email/send-order-confirmation";
 
 const POINTS_PER_DOLLAR = 1; // Milestone 6 plan, Product Decision #9
 
@@ -30,7 +31,17 @@ export async function POST(request: NextRequest) {
   await admin.from("stripe_events").upsert({ id: event.id, type: event.type }, { onConflict: "id", ignoreDuplicates: true });
 
   if (event.type === "checkout.session.completed") {
-    await handleCheckoutSessionCompleted(admin, stripe, event.data.object as Stripe.Checkout.Session);
+    try {
+      await handleCheckoutSessionCompleted(admin, stripe, event.data.object as Stripe.Checkout.Session);
+    } catch (error) {
+      // Deliberately a non-2xx response even though order creation itself
+      // may have already succeeded (see handleCheckoutSessionCompleted's
+      // header comment) - this is what makes Stripe redeliver the event so
+      // a transient failure (most commonly the confirmation email step) gets
+      // retried automatically, without a separate retry queue.
+      console.error(`checkout.session.completed processing failed for event ${event.id}:`, error);
+      return NextResponse.json({ error: "Processing failed" }, { status: 500 });
+    }
   } else if (event.type === "checkout.session.expired") {
     await handleCheckoutSessionExpired(admin, event.data.object as Stripe.Checkout.Session);
   }
@@ -55,6 +66,12 @@ export async function POST(request: NextRequest) {
  * failure in that narrow window would need manual admin reconciliation,
  * not a scenario justifying full saga-style step tracking for a first
  * checkout implementation.
+ *
+ * The confirmation email is deliberately NOT covered by the "order already
+ * exists, return early" shortcut above - it's checked separately via
+ * orders.confirmation_email_sent_at, so a redelivery after an email-only
+ * failure still attempts the email without recreating the order/items/
+ * subscription/rewards (see that column's migration comment).
  */
 async function handleCheckoutSessionCompleted(
   admin: ReturnType<typeof createAdminSupabaseClient>,
@@ -69,11 +86,24 @@ async function handleCheckoutSessionCompleted(
 
   const { data: existingOrder } = await admin
     .from("orders")
-    .select("id")
+    .select("id, confirmation_email_sent_at")
     .eq("stripe_checkout_session_id", session.id)
     .maybeSingle();
-  if (existingOrder) return;
 
+  const orderId = existingOrder ? existingOrder.id : await createOrderFromSession(admin, stripe, session, cartId);
+
+  if (existingOrder?.confirmation_email_sent_at) return;
+
+  await sendOrderConfirmationEmail(admin, orderId);
+  await admin.from("orders").update({ confirmation_email_sent_at: new Date().toISOString() }).eq("id", orderId);
+}
+
+async function createOrderFromSession(
+  admin: ReturnType<typeof createAdminSupabaseClient>,
+  stripe: Stripe,
+  session: Stripe.Checkout.Session,
+  cartId: string
+): Promise<string> {
   const userId = session.metadata?.user_id ?? null;
   const guestEmail = session.metadata?.guest_email ?? null;
   const paymentIntentId =
@@ -210,6 +240,8 @@ async function handleCheckoutSessionCompleted(
       });
     }
   }
+
+  return order.id;
 }
 
 async function handleCheckoutSessionExpired(
