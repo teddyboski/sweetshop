@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { authenticatedFetch } from "@/lib/supabase/authenticated-fetch";
 
 type AddToCartPayload =
   | { itemType: "box"; boxSlug: string; quantity: number }
@@ -22,7 +23,7 @@ export function AddToCartButton({ payload, label = "Add to Cart" }: AddToCartBut
     setState("submitting");
     setErrorMessage(null);
 
-    const response = await fetch("/api/cart/items", {
+    const response = await authenticatedFetch("/api/cart/items", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
