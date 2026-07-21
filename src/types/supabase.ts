@@ -1061,6 +1061,15 @@ export type Database = {
       }
     }
     Functions: {
+      credit_rewards_points: {
+        Args: {
+          p_delta_points: number
+          p_order_id: string
+          p_reason: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       increment_drop_units_sold: {
         Args: { p_drop_id: string; p_qty: number }
         Returns: boolean

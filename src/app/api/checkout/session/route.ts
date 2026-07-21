@@ -138,6 +138,11 @@ export async function POST(request: NextRequest) {
     success_url: `${appUrl}/shop/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${appUrl}/shop/cart`,
     customer_email: !isAuthenticated ? parsed.data.guestEmail : undefined,
+    // Domestic only per the product blueprint ("Shipping: domestic only").
+    // Populates session.shipping_details, which the webhook (Task 3)
+    // snapshots into orders.shipping_address - without this there would be
+    // no address at all to fulfill a physical order against.
+    shipping_address_collection: { allowed_countries: ["US"] },
     metadata: {
       cart_id: cartResult.cartId,
       ...(cartResult.userId ? { user_id: cartResult.userId } : {}),
