@@ -6,6 +6,7 @@ import { Minus, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatPriceCents } from "@/lib/utils";
 import type { CartLine } from "@/lib/supabase/queries/cart";
+import { authenticatedFetch } from "@/lib/supabase/authenticated-fetch";
 
 export interface CartLineRowProps {
   line: CartLine;
@@ -20,7 +21,7 @@ export function CartLineRow({ line }: CartLineRowProps) {
     setPending(true);
     setErrorMessage(null);
 
-    const response = await fetch(`/api/cart/items/${line.id}`, {
+    const response = await authenticatedFetch(`/api/cart/items/${line.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ quantity: nextQuantity }),
@@ -40,7 +41,7 @@ export function CartLineRow({ line }: CartLineRowProps) {
     setPending(true);
     setErrorMessage(null);
 
-    const response = await fetch(`/api/cart/items/${line.id}`, { method: "DELETE" });
+    const response = await authenticatedFetch(`/api/cart/items/${line.id}`, { method: "DELETE" });
 
     if (!response.ok) {
       const body = await response.json().catch(() => null);

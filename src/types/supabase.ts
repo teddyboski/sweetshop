@@ -658,6 +658,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          confirmation_email_sent_at: string | null
           created_at: string
           deleted_at: string | null
           guest_email: string | null
@@ -672,6 +673,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          confirmation_email_sent_at?: string | null
           created_at?: string
           deleted_at?: string | null
           guest_email?: string | null
@@ -686,6 +688,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          confirmation_email_sent_at?: string | null
           created_at?: string
           deleted_at?: string | null
           guest_email?: string | null
@@ -1061,7 +1064,25 @@ export type Database = {
       }
     }
     Functions: {
+      credit_rewards_points: {
+        Args: {
+          p_delta_points: number
+          p_order_id: string
+          p_reason: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
+      increment_drop_units_sold: {
+        Args: { p_drop_id: string; p_qty: number }
+        Returns: boolean
+      }
       is_admin: { Args: never; Returns: boolean }
+      release_inventory_for_cart: {
+        Args: { p_cart_id: string }
+        Returns: undefined
+      }
+      reserve_inventory_for_cart: { Args: { p_cart_id: string }; Returns: Json }
     }
     Enums: {
       [_ in never]: never

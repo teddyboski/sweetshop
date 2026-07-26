@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveCartIdForPage } from "@/lib/cart/resolve-cart";
 import { getCartContents } from "@/lib/supabase/queries/cart";
 import { SNACK_ONLY_FREE_SHIPPING_THRESHOLD_CENTS } from "@/lib/cart/calculate-total";
 import { CartLineRow } from "@/components/features/cart/cart-line-row";
+import { CheckoutButton } from "@/components/features/checkout/checkout-button";
 import { formatPriceCents } from "@/lib/utils";
 
 // Cart contents are per-visitor and mutate on every add/update/remove -
@@ -15,6 +17,11 @@ export default async function CartPage() {
   const cartId = await resolveCartIdForPage(admin);
   const contents = cartId ? await getCartContents(cartId) : null;
   const lines = contents?.lines ?? [];
+
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (lines.length === 0) {
     return (
@@ -61,6 +68,10 @@ export default async function CartPage() {
           <span>Total</span>
           <span data-testid="cart-total">{formatPriceCents(total.totalCents)}</span>
         </div>
+      </div>
+
+      <div className="mt-4">
+        <CheckoutButton isAuthenticated={Boolean(user)} />
       </div>
     </div>
   );
