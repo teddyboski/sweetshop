@@ -12,9 +12,15 @@ export function CopyReferralLink({ link }: CopyReferralLinkProps) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
-    await navigator.clipboard.writeText(link);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard access can be denied by the browser (insecure context,
+      // permission denied, etc.) - the input field itself is still
+      // select-on-focus, so manual copy always works as a fallback.
+    }
   }
 
   return (
