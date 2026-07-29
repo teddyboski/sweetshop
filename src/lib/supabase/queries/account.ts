@@ -265,6 +265,16 @@ export async function getRewardsLedger(userId: string): Promise<RewardsLedgerEnt
   }));
 }
 
+// profiles.rewards_points is a cached running balance (migration header note
+// 2) - the /account/rewards page displays it alongside the full ledger
+// below, never recomputed client-side from the ledger itself.
+export async function getRewardsBalance(userId: string): Promise<number> {
+  const admin = createAdminSupabaseClient();
+  const { data, error } = await admin.from("profiles").select("rewards_points").eq("id", userId).single();
+  if (error) throw error;
+  return data.rewards_points;
+}
+
 // ---------------------------------------------------------------------------
 // Referrals
 // ---------------------------------------------------------------------------
@@ -294,4 +304,13 @@ export async function getReferralsForUser(userId: string): Promise<ReferralStatu
     rewardIssuedAt: referral.reward_issued_at,
     createdAt: referral.created_at,
   }));
+}
+
+// profiles.referral_code is generated at signup (migration default) - the
+// /account/referrals page builds the shareable `?ref=` link from this.
+export async function getReferralCode(userId: string): Promise<string> {
+  const admin = createAdminSupabaseClient();
+  const { data, error } = await admin.from("profiles").select("referral_code").eq("id", userId).single();
+  if (error) throw error;
+  return data.referral_code;
 }
