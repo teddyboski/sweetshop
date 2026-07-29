@@ -11,3 +11,7 @@ export function formatPriceCents(cents: number): string {
     currency: "USD",
   }).format(cents / 100)
 }
+
+export function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+}
