@@ -1062,8 +1062,25 @@ export type Database = {
           },
         ]
       }
+      revenue_by_stream_daily: {
+        Row: {
+          revenue_cents: number | null
+          revenue_date: string | null
+          revenue_stream: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      adjust_inventory: {
+        Args: {
+          p_delta: number
+          p_reason: string
+          p_reference_id?: string | null
+          p_snack_id: string
+        }
+        Returns: undefined
+      }
       credit_rewards_points: {
         Args: {
           p_delta_points: number
