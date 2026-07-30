@@ -44,6 +44,13 @@ export async function POST(request: NextRequest) {
     }
   } else if (event.type === "checkout.session.expired") {
     await handleCheckoutSessionExpired(admin, event.data.object as Stripe.Checkout.Session);
+  } else if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
+    try {
+      await handleSubscriptionSync(admin, event.data.object as Stripe.Subscription);
+    } catch (error) {
+      console.error(`${event.type} processing failed for event ${event.id}:`, error);
+      return NextResponse.json({ error: "Processing failed" }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ received: true }, { status: 200 });
@@ -227,6 +234,18 @@ async function createOrderFromSession(
     });
   }
 
+  // Milestone 7, Task 2: capture the Stripe Customer id Checkout created (a
+  // subscription-mode session always has one) so the account's "Manage
+  // Subscription" Billing Portal session (portal-session route) has a
+  // customer to scope to. Never overwrite an already-captured id - .is()
+  // guard makes this a no-op after the first subscription checkout, exactly
+  // like the update path prevent_profile_privilege_escalation's service_role
+  // exemption already allows (see that migration's header comment).
+  const stripeCustomerId = typeof session.customer === "string" ? session.customer : (session.customer?.id ?? null);
+  if (userId && stripeCustomerId) {
+    await admin.from("profiles").update({ stripe_customer_id: stripeCustomerId }).eq("id", userId).is("stripe_customer_id", null);
+  }
+
   // Rewards accrue only for authenticated purchases, never guests, never
   // retroactively - Milestone 6 plan, Product Decisions #7 and #9.
   if (userId) {
@@ -253,4 +272,76 @@ async function handleCheckoutSessionExpired(
   // release_inventory_for_cart is itself idempotent (Task 1) - safe to call
   // even if this event is somehow delivered more than once.
   await admin.rpc("release_inventory_for_cart", { p_cart_id: cartId });
+}
+
+/**
+ * subscriptions.status only supports ('active', 'paused', 'cancelled',
+ * 'past_due') - narrower than Stripe's own status enum. `trialing` collapses
+ * to 'active' (no separate trial state in this schema); `unpaid`,
+ * `incomplete`, and `incomplete_expired` collapse to 'past_due' as the
+ * closest "not currently deliverable, not yet a hard cancellation" match -
+ * V1 has no dedicated handling for those rarer terminal/pre-activation
+ * states. Note the spelling difference: Stripe's `canceled` (one L) maps to
+ * this schema's `cancelled` (two Ls, the check constraint's actual spelling).
+ */
+function mapStripeSubscriptionStatus(status: Stripe.Subscription.Status): "active" | "paused" | "cancelled" | "past_due" {
+  switch (status) {
+    case "active":
+    case "trialing":
+      return "active";
+    case "paused":
+      return "paused";
+    case "canceled":
+      return "cancelled";
+    case "past_due":
+    case "unpaid":
+    case "incomplete":
+    case "incomplete_expired":
+      return "past_due";
+    default:
+      return "past_due";
+  }
+}
+
+/**
+ * Milestone 7, Task 2: keeps the local subscriptions row in sync with
+ * whatever the customer just did inside Stripe's hosted Customer Portal
+ * (pause, cancel, etc.) - the Portal changes Stripe's state first, our DB
+ * is the mirror, same pattern as the checkout webhook above. Naturally
+ * idempotent on redelivery: this is a pure UPDATE reflecting Stripe's
+ * current state, so applying the same event twice (or events arriving
+ * out of order) converges on the same row - no separate idempotency
+ * ledger needed beyond the stripe_events audit upsert already done for
+ * every event in POST above.
+ *
+ * `current_period_end` moved off the top-level Subscription object in
+ * newer Stripe API versions onto each subscription item (confirmed against
+ * the installed package's actual .d.ts, not assumed) - the first item's
+ * value is used as next_delivery_at, matching this app's one-item-per-
+ * subscription checkout flow.
+ */
+async function handleSubscriptionSync(admin: ReturnType<typeof createAdminSupabaseClient>, subscription: Stripe.Subscription) {
+  const nextDeliveryAtSeconds = subscription.items.data[0]?.current_period_end;
+
+  const { data, error } = await admin
+    .from("subscriptions")
+    .update({
+      status: mapStripeSubscriptionStatus(subscription.status),
+      next_delivery_at: nextDeliveryAtSeconds ? new Date(nextDeliveryAtSeconds * 1000).toISOString() : null,
+    })
+    .eq("stripe_subscription_id", subscription.id)
+    .select("id");
+
+  if (error) {
+    console.error(`Failed to sync subscription ${subscription.id}:`, error);
+    throw error;
+  }
+
+  if (!data || data.length === 0) {
+    // Not one of ours (e.g. a subscription created directly in the Stripe
+    // Dashboard, or a redelivery after the row was somehow removed) -
+    // logged for visibility, not an error worth failing/retrying the
+    // webhook over.
+    console.error(`customer.subscription event for ${subscription.id} has no matching local subscriptions row`);
+  }
 }
