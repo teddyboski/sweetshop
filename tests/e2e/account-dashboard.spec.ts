@@ -26,6 +26,13 @@ test("logged-in customer can view an order, manage a subscription, edit preferen
   page,
   context,
 }) => {
+  // Default 30s is too tight for this journey - 7+ sequential admin-client
+  // round trips to seed fixtures, a real Supabase Auth login, then six page
+  // navigations, all against the same live, shared, free-tier Supabase
+  // project other tests document as occasionally slow/rate-limited, plus
+  // `next dev` cold-compiling each route on first hit (see playwright.config.ts).
+  test.setTimeout(120_000);
+
   const email = `test-e2e-dashboard-${crypto.randomUUID()}@mailinator.com`;
   const password = "password123";
 
@@ -83,8 +90,9 @@ test("logged-in customer can view an order, manage a subscription, edit preferen
 
     // --- View order ---
     await page.goto("/account/orders");
-    await expect(page.getByText(`Order #${orderId.slice(0, 8)}`)).toBeVisible();
-    await page.getByText(`Order #${orderId.slice(0, 8)}`).click();
+    const orderLink = page.getByRole("link", { name: new RegExp(`Order #${orderId.slice(0, 8)}`) });
+    await expect(orderLink).toBeVisible();
+    await orderLink.click();
     await expect(page).toHaveURL(new RegExp(`/account/orders/${orderId}`));
     await expect(page.getByRole("heading", { name: `Order #${orderId.slice(0, 8)}` })).toBeVisible();
 
@@ -112,7 +120,9 @@ test("logged-in customer can view an order, manage a subscription, edit preferen
 
     // --- View rewards ---
     await page.goto("/account/rewards");
-    await expect(page.getByText("19 pts")).toBeVisible();
+    // Exact match needed - the ledger entry below renders "+19 pts", which
+    // otherwise also satisfies a substring match on "19 pts".
+    await expect(page.getByText("19 pts", { exact: true })).toBeVisible();
     await expect(page.getByText(`Order #${orderId.slice(0, 8)}`)).toBeVisible();
 
     // --- Copy referral link ---
