@@ -1084,7 +1084,7 @@ export type Database = {
       credit_rewards_points: {
         Args: {
           p_delta_points: number
-          p_order_id: string
+          p_order_id: string | null
           p_reason: string
           p_user_id: string
         }
