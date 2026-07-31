@@ -24,7 +24,11 @@ export default async function AdminInventoryPage() {
       <h2 className="mt-6 font-heading text-lg font-semibold">Stock levels</h2>
       <div className="mt-2 divide-y rounded-lg border">
         {(inventory ?? []).map((row) => (
-          <div key={row.snack_id} className="flex items-center justify-between gap-4 p-4 text-sm">
+          <div
+            key={row.snack_id}
+            data-testid={`inventory-row-${row.snack_id}`}
+            className="flex items-center justify-between gap-4 p-4 text-sm"
+          >
             <div className="flex-1">
               <p className="font-medium">{row.snacks?.name}</p>
               <p className={row.quantity_on_hand < 10 ? "text-destructive" : "text-muted-foreground"}>
