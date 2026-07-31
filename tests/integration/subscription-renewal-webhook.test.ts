@@ -47,6 +47,11 @@ afterAll(async () => {
 });
 
 afterEach(async () => {
+  // customer_activity has no ON DELETE CASCADE from profiles - see
+  // admin-customers-queries.test.ts's afterEach comment - so it's cleared
+  // explicitly here too, ahead of afterAll's deleteUser call.
+  await admin.from("customer_activity").delete().eq("user_id", userId);
+
   for (const orderId of createdOrderIds) {
     await admin.from("rewards_ledger").delete().eq("order_id", orderId);
     await admin.from("orders").delete().eq("id", orderId);
@@ -127,6 +132,15 @@ describe("POST /api/webhooks/stripe - invoice.paid", () => {
     const { data: profileAfter } = await admin.from("profiles").select("rewards_points").eq("id", userId).single();
     expect(profileAfter!.rewards_points).toBe((profileBefore!.rewards_points ?? 0) + 50);
 
+    // Milestone 8, Task 8: customer_activity backfill.
+    const { data: activityRows } = await admin
+      .from("customer_activity")
+      .select("event_type, metadata")
+      .eq("user_id", userId)
+      .eq("event_type", "order_placed");
+    expect(activityRows).toHaveLength(1);
+    expect(activityRows![0]!.metadata).toEqual({ order_id: order!.id });
+
     // Redelivery: must not create a second order or credit rewards again.
     const secondResponse = await postWebhook(webhookRequest(payload, signature));
     expect(secondResponse.status).toBe(200);
@@ -139,6 +153,13 @@ describe("POST /api/webhooks/stripe - invoice.paid", () => {
 
     const { data: profileAfterRedelivery } = await admin.from("profiles").select("rewards_points").eq("id", userId).single();
     expect(profileAfterRedelivery!.rewards_points).toBe(profileAfter!.rewards_points);
+
+    const { data: activityAfterRedelivery } = await admin
+      .from("customer_activity")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("event_type", "order_placed");
+    expect(activityAfterRedelivery).toHaveLength(1);
   }, 20000);
 
   it("a subscription_create invoice is skipped - no order created (already handled by checkout.session.completed)", async () => {

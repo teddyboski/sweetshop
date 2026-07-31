@@ -48,6 +48,18 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ data: null, error: { message: "Could not save preferences" } }, { status: 500 });
   }
 
+  // Milestone 8, Task 8: customer_activity backfill. Awaited as part of this
+  // same request (not a fire-and-forget side call, per the plan) so a
+  // failure is actually visible in logs - but it does not fail the response,
+  // since the preferences save itself already succeeded and is the thing the
+  // customer is waiting on.
+  const { error: activityError } = await admin
+    .from("customer_activity")
+    .insert({ user_id: user.id, event_type: "preference_updated" });
+  if (activityError) {
+    console.error(`Failed to log preference_updated activity for user ${user.id}:`, activityError);
+  }
+
   return NextResponse.json(
     {
       data: {

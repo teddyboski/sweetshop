@@ -51,9 +51,18 @@ beforeAll(async () => {
 afterAll(async () => {
   // customer_addresses/customer_preferences cascade from profiles on delete
   // (see the migration's "on delete cascade"), so no manual row cleanup is
-  // needed before deleting the users themselves.
-  if (userAId) await admin.auth.admin.deleteUser(userAId);
-  if (userBId) await admin.auth.admin.deleteUser(userBId);
+  // needed for those before deleting the users themselves. customer_activity
+  // does NOT cascade (Milestone 8, Task 8 wired the preferences PATCH route
+  // to write to it) - see admin-customers-queries.test.ts's afterEach
+  // comment - so it must be cleared explicitly first.
+  if (userAId) {
+    await admin.from("customer_activity").delete().eq("user_id", userAId);
+    await admin.auth.admin.deleteUser(userAId);
+  }
+  if (userBId) {
+    await admin.from("customer_activity").delete().eq("user_id", userBId);
+    await admin.auth.admin.deleteUser(userBId);
+  }
 });
 
 function patchPreferencesRequest(body: unknown, token?: string) {
@@ -125,6 +134,14 @@ describe("PATCH /api/account/preferences", () => {
       spiceTolerance: "mild",
       marketingOptIn: false,
     });
+
+    // Milestone 8, Task 8: customer_activity backfill.
+    const { data: activityRows } = await admin
+      .from("customer_activity")
+      .select("id")
+      .eq("user_id", userAId)
+      .eq("event_type", "preference_updated");
+    expect(activityRows).toHaveLength(1);
   });
 
   it("rejects requests with no bearer token", async () => {

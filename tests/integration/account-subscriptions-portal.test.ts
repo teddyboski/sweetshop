@@ -47,11 +47,16 @@ beforeAll(async () => {
 afterAll(async () => {
   // subscriptions.user_id references profiles(id) without cascade
   // (RESTRICT) - must clear before deleting the user, same constraint
-  // documented in account-queries.test.ts's teardown.
+  // documented in account-queries.test.ts's teardown. customer_activity is
+  // the same story (Milestone 8, Task 8 wired handleSubscriptionSync to
+  // write to it) - see admin-customers-queries.test.ts's afterEach comment.
   for (const subscriptionId of createdSubscriptionIds) {
     await admin.from("subscriptions").delete().eq("id", subscriptionId);
   }
-  if (userId) await admin.auth.admin.deleteUser(userId);
+  if (userId) {
+    await admin.from("customer_activity").delete().eq("user_id", userId);
+    await admin.auth.admin.deleteUser(userId);
+  }
 });
 
 function portalSessionRequest(token?: string) {
@@ -147,6 +152,15 @@ describe("customer.subscription.updated / .deleted webhook sync", () => {
     expect(afterFirst!.status).toBe("paused");
     expect(new Date(afterFirst!.next_delivery_at!).getTime()).toBe(periodEndSeconds * 1000);
 
+    // Milestone 8, Task 8: customer_activity backfill for the pause
+    // transition.
+    const { data: activityAfterFirst } = await admin
+      .from("customer_activity")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("event_type", "subscription_paused");
+    expect(activityAfterFirst).toHaveLength(1);
+
     // Redelivery: Stripe retries if it doesn't see a fast 2xx. This is a pure
     // state-mirroring UPDATE, so applying the same event twice must converge
     // on the same row, not create a duplicate or a different result.
@@ -159,6 +173,15 @@ describe("customer.subscription.updated / .deleted webhook sync", () => {
       .eq("stripe_subscription_id", subscription!.stripe_subscription_id!);
     expect(matchingRows).toHaveLength(1);
     expect(matchingRows![0]!.status).toBe("paused");
+
+    // Redelivery must not write a second activity row - see
+    // handleSubscriptionSync's before?.status gate.
+    const { data: activityAfterRedelivery } = await admin
+      .from("customer_activity")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("event_type", "subscription_paused");
+    expect(activityAfterRedelivery).toHaveLength(1);
   });
 
   it("maps customer.subscription.deleted to status 'cancelled'", async () => {

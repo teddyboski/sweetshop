@@ -265,6 +265,18 @@ async function createOrderFromSession(
         p_order_id: order.id,
       });
     }
+
+    // Milestone 8, Task 8: customer_activity backfill. Guests have no
+    // user_id (the column is not-null), so this is authenticated-only, same
+    // scope as rewards accrual just above. Awaited (not fire-and-forget) so
+    // a failure is visible, but doesn't fail the webhook - the order itself
+    // already committed successfully.
+    const { error: activityError } = await admin
+      .from("customer_activity")
+      .insert({ user_id: userId, event_type: "order_placed", metadata: { order_id: order.id } });
+    if (activityError) {
+      console.error(`Failed to log order_placed activity for order ${order.id}:`, activityError);
+    }
   }
 
   return order.id;
@@ -391,6 +403,15 @@ async function handleInvoicePaid(admin: ReturnType<typeof createAdminSupabaseCli
       p_order_id: order.id,
     });
   }
+
+  // Milestone 8, Task 8: customer_activity backfill - see
+  // handleCheckoutSessionCompleted's identical block for the same rationale.
+  const { error: activityError } = await admin
+    .from("customer_activity")
+    .insert({ user_id: subscription.user_id, event_type: "order_placed", metadata: { order_id: order.id } });
+  if (activityError) {
+    console.error(`Failed to log order_placed activity for renewal order ${order.id}:`, activityError);
+  }
 }
 
 async function handleCheckoutSessionExpired(
@@ -452,15 +473,26 @@ function mapStripeSubscriptionStatus(status: Stripe.Subscription.Status): "activ
  */
 async function handleSubscriptionSync(admin: ReturnType<typeof createAdminSupabaseClient>, subscription: Stripe.Subscription) {
   const nextDeliveryAtSeconds = subscription.items.data[0]?.current_period_end;
+  const mappedStatus = mapStripeSubscriptionStatus(subscription.status);
+
+  // Read the pre-update status first so the customer_activity insert below
+  // can tell a genuine pause *transition* apart from a redelivery of an
+  // event that already applied (the UPDATE itself has no such distinction -
+  // it's a pure state mirror, per this function's own idempotency note).
+  const { data: before } = await admin
+    .from("subscriptions")
+    .select("status")
+    .eq("stripe_subscription_id", subscription.id)
+    .maybeSingle();
 
   const { data, error } = await admin
     .from("subscriptions")
     .update({
-      status: mapStripeSubscriptionStatus(subscription.status),
+      status: mappedStatus,
       next_delivery_at: nextDeliveryAtSeconds ? new Date(nextDeliveryAtSeconds * 1000).toISOString() : null,
     })
     .eq("stripe_subscription_id", subscription.id)
-    .select("id");
+    .select("id, user_id");
 
   if (error) {
     console.error(`Failed to sync subscription ${subscription.id}:`, error);
@@ -473,5 +505,22 @@ async function handleSubscriptionSync(admin: ReturnType<typeof createAdminSupaba
     // logged for visibility, not an error worth failing/retrying the
     // webhook over.
     console.error(`customer.subscription event for ${subscription.id} has no matching local subscriptions row`);
+    return;
+  }
+
+  // Milestone 8, Task 8: customer_activity backfill. customer_activity's
+  // event_type check constraint only has a 'subscription_paused' value (no
+  // 'subscription_cancelled'/'subscription_resumed' - see the initial schema
+  // migration), so only the 'paused' status transition is logged here; other
+  // status changes have no matching event_type to record. Gated on
+  // before?.status !== "paused" (not just the new status) so a redelivered
+  // event that was already applied doesn't write a second row.
+  if (mappedStatus === "paused" && before?.status !== "paused") {
+    const { error: activityError } = await admin
+      .from("customer_activity")
+      .insert({ user_id: data[0]!.user_id, event_type: "subscription_paused" });
+    if (activityError) {
+      console.error(`Failed to log subscription_paused activity for subscription ${subscription.id}:`, activityError);
+    }
   }
 }
