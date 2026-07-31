@@ -51,6 +51,13 @@ export async function POST(request: NextRequest) {
       console.error(`${event.type} processing failed for event ${event.id}:`, error);
       return NextResponse.json({ error: "Processing failed" }, { status: 500 });
     }
+  } else if (event.type === "invoice.paid") {
+    try {
+      await handleInvoicePaid(admin, event.data.object as Stripe.Invoice);
+    } catch (error) {
+      console.error(`invoice.paid processing failed for event ${event.id}:`, error);
+      return NextResponse.json({ error: "Processing failed" }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ received: true }, { status: 200 });
@@ -258,9 +265,153 @@ async function createOrderFromSession(
         p_order_id: order.id,
       });
     }
+
+    // Milestone 8, Task 8: customer_activity backfill. Guests have no
+    // user_id (the column is not-null), so this is authenticated-only, same
+    // scope as rewards accrual just above. Awaited (not fire-and-forget) so
+    // a failure is visible, but doesn't fail the webhook - the order itself
+    // already committed successfully.
+    const { error: activityError } = await admin
+      .from("customer_activity")
+      .insert({ user_id: userId, event_type: "order_placed", metadata: { order_id: order.id } });
+    if (activityError) {
+      console.error(`Failed to log order_placed activity for order ${order.id}:`, activityError);
+    }
   }
 
   return order.id;
+}
+
+/**
+ * Milestone 8, Task 1B: records subscription renewal revenue, which is
+ * otherwise invisible to `orders` entirely - checkout.session.completed
+ * only ever fires once, for a subscription's first invoice.
+ * invoice.paid fires for that first invoice AND every renewal;
+ * `billing_reason` is what tells them apart: 'subscription_create' is the
+ * first invoice (already handled above - processing it again here would
+ * double-count that same payment), 'subscription_cycle' is a renewal.
+ * Only the latter creates a new order here.
+ *
+ * `stripe_payment_intent_id` is left null for these orders: this Stripe
+ * API version has no direct payment_intent field on Invoice at all (only
+ * reachable via the separate, paginated `invoice.payments` sub-resource,
+ * confirmed against the installed package's actual .d.ts, not assumed).
+ * Product Decision #1 already scopes the admin Refund button (Task 6) to
+ * one-time-payment orders only - refunding a specific renewal invoice is
+ * explicitly out of scope for that button, so nothing will ever read this
+ * field for a renewal-created order.
+ *
+ * Idempotency: keyed off a synthetic `stripe_checkout_session_id` value
+ * (`invoice_<invoice.id>`) rather than a real session id, since no
+ * Checkout Session exists for a renewal - mirrors
+ * handleCheckoutSessionCompleted's own idempotency anchor exactly.
+ *
+ * customer_activity logging is added in Task 8 alongside the other two
+ * already-existing endpoints identified there, not here - keeping this
+ * function scoped to the actual Task 1B addition (order creation +
+ * rewards).
+ */
+async function handleInvoicePaid(admin: ReturnType<typeof createAdminSupabaseClient>, invoice: Stripe.Invoice) {
+  if (invoice.billing_reason !== "subscription_cycle") return;
+
+  const subscriptionRef = invoice.parent?.subscription_details?.subscription;
+  const stripeSubscriptionId = typeof subscriptionRef === "string" ? subscriptionRef : subscriptionRef?.id;
+  if (!stripeSubscriptionId) {
+    console.error(
+      `invoice.paid ${invoice.id} has billing_reason subscription_cycle but no parent.subscription_details.subscription`
+    );
+    return;
+  }
+
+  const { data: subscription } = await admin
+    .from("subscriptions")
+    .select("user_id, box_id")
+    .eq("stripe_subscription_id", stripeSubscriptionId)
+    .maybeSingle();
+
+  if (!subscription) {
+    console.error(`invoice.paid ${invoice.id}: no local subscriptions row for ${stripeSubscriptionId}`);
+    return;
+  }
+
+  const syntheticSessionId = `invoice_${invoice.id}`;
+  const { data: existingOrder } = await admin
+    .from("orders")
+    .select("id")
+    .eq("stripe_checkout_session_id", syntheticSessionId)
+    .maybeSingle();
+  if (existingOrder) return; // Already processed this invoice - redelivery, no-op.
+
+  const { data: defaultAddress } = await admin
+    .from("customer_addresses")
+    .select("recipient_name, line1, line2, city, state, postal_code, country")
+    .eq("user_id", subscription.user_id)
+    .eq("is_default", true)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  const shippingAddress = defaultAddress
+    ? {
+        name: defaultAddress.recipient_name,
+        address: {
+          line1: defaultAddress.line1,
+          line2: defaultAddress.line2,
+          city: defaultAddress.city,
+          state: defaultAddress.state,
+          postal_code: defaultAddress.postal_code,
+          country: defaultAddress.country,
+        },
+      }
+    : null;
+
+  const { data: order, error: orderError } = await admin
+    .from("orders")
+    .insert({
+      user_id: subscription.user_id,
+      stripe_payment_intent_id: null,
+      stripe_checkout_session_id: syntheticSessionId,
+      status: "paid",
+      total_amount_cents: invoice.amount_paid,
+      shipping_address: shippingAddress,
+    })
+    .select("id")
+    .single();
+
+  if (orderError || !order) {
+    console.error(`Failed to create renewal order for invoice ${invoice.id}:`, orderError);
+    throw orderError ?? new Error("Order insert returned no row");
+  }
+
+  await admin.from("order_items").insert({
+    order_id: order.id,
+    item_type: "box",
+    box_id: subscription.box_id,
+    quantity: 1,
+    unit_price_cents: invoice.amount_paid,
+  });
+
+  // Renewals earn rewards same as any other confirmed payment - Milestone 6
+  // Decision #9's "1 point per dollar spent" wasn't scoped to first
+  // payments only. Distinct reason from the initial purchase's
+  // 'order_placed' so the ledger (Task 9's admin view) can tell them apart.
+  const points = Math.floor(invoice.amount_paid / 100) * POINTS_PER_DOLLAR;
+  if (points > 0) {
+    await admin.rpc("credit_rewards_points", {
+      p_user_id: subscription.user_id,
+      p_delta_points: points,
+      p_reason: "subscription_renewal",
+      p_order_id: order.id,
+    });
+  }
+
+  // Milestone 8, Task 8: customer_activity backfill - see
+  // handleCheckoutSessionCompleted's identical block for the same rationale.
+  const { error: activityError } = await admin
+    .from("customer_activity")
+    .insert({ user_id: subscription.user_id, event_type: "order_placed", metadata: { order_id: order.id } });
+  if (activityError) {
+    console.error(`Failed to log order_placed activity for renewal order ${order.id}:`, activityError);
+  }
 }
 
 async function handleCheckoutSessionExpired(
@@ -322,15 +473,26 @@ function mapStripeSubscriptionStatus(status: Stripe.Subscription.Status): "activ
  */
 async function handleSubscriptionSync(admin: ReturnType<typeof createAdminSupabaseClient>, subscription: Stripe.Subscription) {
   const nextDeliveryAtSeconds = subscription.items.data[0]?.current_period_end;
+  const mappedStatus = mapStripeSubscriptionStatus(subscription.status);
+
+  // Read the pre-update status first so the customer_activity insert below
+  // can tell a genuine pause *transition* apart from a redelivery of an
+  // event that already applied (the UPDATE itself has no such distinction -
+  // it's a pure state mirror, per this function's own idempotency note).
+  const { data: before } = await admin
+    .from("subscriptions")
+    .select("status")
+    .eq("stripe_subscription_id", subscription.id)
+    .maybeSingle();
 
   const { data, error } = await admin
     .from("subscriptions")
     .update({
-      status: mapStripeSubscriptionStatus(subscription.status),
+      status: mappedStatus,
       next_delivery_at: nextDeliveryAtSeconds ? new Date(nextDeliveryAtSeconds * 1000).toISOString() : null,
     })
     .eq("stripe_subscription_id", subscription.id)
-    .select("id");
+    .select("id, user_id");
 
   if (error) {
     console.error(`Failed to sync subscription ${subscription.id}:`, error);
@@ -343,5 +505,22 @@ async function handleSubscriptionSync(admin: ReturnType<typeof createAdminSupaba
     // logged for visibility, not an error worth failing/retrying the
     // webhook over.
     console.error(`customer.subscription event for ${subscription.id} has no matching local subscriptions row`);
+    return;
+  }
+
+  // Milestone 8, Task 8: customer_activity backfill. customer_activity's
+  // event_type check constraint only has a 'subscription_paused' value (no
+  // 'subscription_cancelled'/'subscription_resumed' - see the initial schema
+  // migration), so only the 'paused' status transition is logged here; other
+  // status changes have no matching event_type to record. Gated on
+  // before?.status !== "paused" (not just the new status) so a redelivered
+  // event that was already applied doesn't write a second row.
+  if (mappedStatus === "paused" && before?.status !== "paused") {
+    const { error: activityError } = await admin
+      .from("customer_activity")
+      .insert({ user_id: data[0]!.user_id, event_type: "subscription_paused" });
+    if (activityError) {
+      console.error(`Failed to log subscription_paused activity for subscription ${subscription.id}:`, activityError);
+    }
   }
 }

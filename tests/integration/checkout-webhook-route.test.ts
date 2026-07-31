@@ -80,6 +80,11 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  // customer_activity has no ON DELETE CASCADE from profiles - see
+  // admin-customers-queries.test.ts's afterEach comment - so it's cleared
+  // explicitly here too, ahead of afterAll's deleteUser call.
+  await admin.from("customer_activity").delete().eq("user_id", userId);
+
   // rewards_ledger.order_id has no ON DELETE CASCADE (deliberately - it's an
   // append-only ledger, see migration comment), so it must be cleared before
   // the order row it references can be deleted. order_items/order_item_snacks
@@ -250,6 +255,15 @@ describe("POST /api/webhooks/stripe", () => {
     const { data: cartAfter } = await admin.from("carts").select("status").eq("id", cartId).single();
     expect(cartAfter!.status).toBe("converted");
 
+    // Milestone 8, Task 8: customer_activity backfill.
+    const { data: activityRows } = await admin
+      .from("customer_activity")
+      .select("event_type, metadata")
+      .eq("user_id", userId)
+      .eq("event_type", "order_placed");
+    expect(activityRows).toHaveLength(1);
+    expect(activityRows![0]!.metadata).toEqual({ order_id: order!.id });
+
     // Redelivery: Stripe retries the same event if it doesn't see a fast 2xx.
     // Idempotency is anchored on orders.stripe_checkout_session_id (see the
     // route's own header comment for why), so a second delivery of the exact
@@ -273,6 +287,13 @@ describe("POST /api/webhooks/stripe", () => {
     // so the redelivery's "order exists AND email already sent" branch
     // should short-circuit before ever calling Resend again.
     expect(mockSend).toHaveBeenCalledTimes(1);
+
+    const { data: activityAfterRedelivery } = await admin
+      .from("customer_activity")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("event_type", "order_placed");
+    expect(activityAfterRedelivery).toHaveLength(1);
   }, 20000);
 
   it("when the confirmation email fails to send, returns 500 without recreating the order, then a redelivery sends it without double-crediting rewards", async () => {
@@ -411,6 +432,14 @@ describe("POST /api/webhooks/stripe", () => {
     // Product Decision #7: rewards never accrue on guest orders.
     const { data: ledgerRows } = await admin.from("rewards_ledger").select("id").eq("order_id", order!.id);
     expect(ledgerRows).toHaveLength(0);
+
+    // Milestone 8, Task 8: same scope as rewards - customer_activity.user_id
+    // is not-null, so guest orders (no user_id) have nothing to log against.
+    const { data: activityRows } = await admin
+      .from("customer_activity")
+      .select("id")
+      .contains("metadata", { order_id: order!.id });
+    expect(activityRows).toHaveLength(0);
   });
 
   it("processes checkout.session.expired: releases reserved inventory back to its pre-checkout level", async () => {
