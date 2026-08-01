@@ -40,6 +40,12 @@ const createdCartIds: string[] = [];
 const createdOrderIds: string[] = [];
 const createdSubscriptionIds: string[] = [];
 const inventoryRestores: Array<{ snackId: string; quantity: number }> = [];
+const createdPromotionIds: string[] = [];
+// Milestone 9: referral tests need their own referrer/referred pair, kept
+// separate from the main `userId` fixture used by every other test in this
+// file (which has no referred_by relationship).
+const extraUserIds: string[] = [];
+let rewardsBalanceBeforeAll: number;
 
 const email = `test-webhook-${crypto.randomUUID()}@mailinator.com`;
 const password = crypto.randomUUID();
@@ -68,6 +74,9 @@ beforeAll(async () => {
   const { data: session, error: signInError } = await anonAuthClient.auth.signInWithPassword({ email, password });
   if (signInError || !session.session) throw signInError;
   userToken = session.session.access_token;
+
+  const { data: profile } = await admin.from("profiles").select("rewards_points").eq("id", userId).single();
+  rewardsBalanceBeforeAll = profile?.rewards_points ?? 0;
 });
 
 afterAll(async () => {
@@ -109,7 +118,69 @@ afterEach(async () => {
     await admin.from("inventory").update({ quantity_on_hand: quantity }).eq("snack_id", snackId);
   }
   inventoryRestores.length = 0;
+
+  for (const id of createdPromotionIds) {
+    await admin.from("promotions").delete().eq("id", id);
+  }
+  createdPromotionIds.length = 0;
+
+  // Referrer bonus ledger rows have order_id null (see the webhook's
+  // credit_rewards_points call for referral_referrer_credit), so they
+  // aren't cleared by the createdOrderIds loop above - cleared explicitly
+  // here by user_id instead, same pattern as rewards-referrals-foundations.
+  for (const id of extraUserIds) {
+    await admin.from("customer_activity").delete().eq("user_id", id);
+    await admin.from("referrals").delete().or(`referrer_id.eq.${id},referred_id.eq.${id}`);
+    await admin.from("rewards_ledger").delete().eq("user_id", id);
+    await admin.auth.admin.deleteUser(id);
+  }
+  extraUserIds.length = 0;
+
+  await admin.from("profiles").update({ rewards_points: rewardsBalanceBeforeAll }).eq("id", userId);
 });
+
+async function seedPromotion(
+  overrides: Partial<{ discountType: "percent" | "fixed"; value: number; usageLimit: number | null }> = {}
+) {
+  const { data, error } = await admin
+    .from("promotions")
+    .insert({
+      code: `TEST${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+      discount_type: overrides.discountType ?? "fixed",
+      value: overrides.value ?? 100,
+      usage_limit: overrides.usageLimit ?? null,
+    })
+    .select("id, code")
+    .single();
+  if (error || !data) throw error;
+  createdPromotionIds.push(data.id);
+  return data;
+}
+
+async function createUser(prefix: string, userMetadata?: Record<string, unknown>) {
+  const userEmail = `test-${prefix}-${crypto.randomUUID()}@mailinator.com`;
+  const userPassword = crypto.randomUUID();
+  const { data, error } = await admin.auth.admin.createUser({
+    email: userEmail,
+    password: userPassword,
+    email_confirm: true,
+    user_metadata: userMetadata,
+  });
+  if (error || !data.user) throw error;
+  extraUserIds.push(data.user.id);
+
+  const anonAuthClient = createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
+  );
+  const { data: signIn, error: signInError } = await anonAuthClient.auth.signInWithPassword({
+    email: userEmail,
+    password: userPassword,
+  });
+  if (signInError || !signIn.session) throw signInError;
+
+  return { id: data.user.id, token: signIn.session.access_token };
+}
 
 function cartItemRequest(body: unknown, opts: { cookie?: string; token?: string } = {}) {
   const headers: Record<string, string> = {};
@@ -482,4 +553,250 @@ describe("POST /api/webhooks/stripe", () => {
       .single();
     expect(releasedInventory!.quantity_on_hand).toBe(originalQuantity);
   });
+
+  // Milestone 9, Task 4.
+  it("increments the promotion's used_count exactly once, not again on redelivery", async () => {
+    const promotion = await seedPromotion({ discountType: "fixed", value: 100 });
+
+    const response = await postCartItem(cartItemRequest({ itemType: "snack", snackId: sellableSnackId, quantity: 1 }));
+    const body = await response.json();
+    const cookieValue = response.headers.get("set-cookie")!.match(/anonymous_cart_id=([^;]+)/)![1];
+    const { data: cartItem } = await admin.from("cart_items").select("cart_id").eq("id", body.data.cartItemId).single();
+    createdCartIds.push(cartItem!.cart_id);
+
+    const checkoutResponse = await postCheckoutSession(
+      checkoutSessionRequest({ guestEmail: "guest-promo-webhook@example.com", promoCode: promotion.code }, { cookie: cookieValue })
+    );
+    const checkoutBody = await checkoutResponse.json();
+    expect(checkoutResponse.status).toBe(201);
+
+    const realSession = await stripe.checkout.sessions.retrieve(checkoutBody.data.id);
+    const completedSession = { ...realSession, payment_intent: `pi_test_${crypto.randomUUID()}` };
+    const { payload, signature } = buildSignedEvent("checkout.session.completed", completedSession);
+
+    const firstResponse = await postWebhook(webhookRequest(payload, signature));
+    expect(firstResponse.status).toBe(200);
+
+    const { data: order } = await admin
+      .from("orders")
+      .select("id")
+      .eq("stripe_checkout_session_id", checkoutBody.data.id)
+      .single();
+    createdOrderIds.push(order!.id);
+
+    const { data: promoAfterFirst } = await admin.from("promotions").select("used_count").eq("id", promotion.id).single();
+    expect(promoAfterFirst!.used_count).toBe(1);
+
+    const secondResponse = await postWebhook(webhookRequest(payload, signature));
+    expect(secondResponse.status).toBe(200);
+
+    const { data: promoAfterRedelivery } = await admin.from("promotions").select("used_count").eq("id", promotion.id).single();
+    expect(promoAfterRedelivery!.used_count).toBe(1);
+  }, 20000);
+
+  it("debits redeemed points exactly once and logs reward_redeemed, not again on redelivery", async () => {
+    await admin.from("profiles").update({ rewards_points: 1000 }).eq("id", userId);
+
+    const response = await postCartItem(
+      cartItemRequest({ itemType: "snack", snackId: sellableSnackId, quantity: 1 }, { token: userToken })
+    );
+    expect(response.status).toBe(201);
+    const cartId = await cartIdForAuthenticatedUser();
+    createdCartIds.push(cartId);
+
+    const checkoutResponse = await postCheckoutSession(
+      checkoutSessionRequest({ redeemPoints: 300 }, { token: userToken })
+    );
+    const checkoutBody = await checkoutResponse.json();
+    expect(checkoutResponse.status).toBe(201);
+
+    const realSession = await stripe.checkout.sessions.retrieve(checkoutBody.data.id);
+    const completedSession = { ...realSession, payment_intent: `pi_test_${crypto.randomUUID()}` };
+    const { payload, signature } = buildSignedEvent("checkout.session.completed", completedSession);
+
+    const firstResponse = await postWebhook(webhookRequest(payload, signature));
+    expect(firstResponse.status).toBe(200);
+
+    const { data: order } = await admin
+      .from("orders")
+      .select("id")
+      .eq("stripe_checkout_session_id", checkoutBody.data.id)
+      .single();
+    createdOrderIds.push(order!.id);
+
+    const { data: redemptionRows } = await admin
+      .from("rewards_ledger")
+      .select("delta_points")
+      .eq("order_id", order!.id)
+      .eq("reason", "redemption");
+    expect(redemptionRows).toHaveLength(1);
+    expect(redemptionRows![0]!.delta_points).toBe(-300);
+
+    const { data: activityRows } = await admin
+      .from("customer_activity")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("event_type", "reward_redeemed");
+    expect(activityRows).toHaveLength(1);
+
+    const secondResponse = await postWebhook(webhookRequest(payload, signature));
+    expect(secondResponse.status).toBe(200);
+
+    const { data: redemptionRowsAfterRedelivery } = await admin
+      .from("rewards_ledger")
+      .select("id")
+      .eq("order_id", order!.id)
+      .eq("reason", "redemption");
+    expect(redemptionRowsAfterRedelivery).toHaveLength(1);
+  }, 20000);
+
+  it("credits both sides of a referral 500 points exactly once and flips the referral to credited, then does not re-credit on a second order", async () => {
+    const referrer = await createUser("referrer-webhook");
+    const { data: referrerProfile } = await admin
+      .from("profiles")
+      .select("referral_code")
+      .eq("id", referrer.id)
+      .single();
+
+    const referred = await createUser("referred-webhook", { referral_code: referrerProfile!.referral_code });
+
+    async function checkoutAndComplete() {
+      const response = await postCartItem(
+        cartItemRequest({ itemType: "snack", snackId: sellableSnackId, quantity: 1 }, { token: referred.token })
+      );
+      expect(response.status).toBe(201);
+      const { data: cart } = await admin
+        .from("carts")
+        .select("id")
+        .eq("user_id", referred.id)
+        .eq("status", "active")
+        .single();
+      createdCartIds.push(cart!.id);
+
+      const checkoutResponse = await postCheckoutSession(checkoutSessionRequest({}, { token: referred.token }));
+      const checkoutBody = await checkoutResponse.json();
+      expect(checkoutResponse.status).toBe(201);
+
+      const realSession = await stripe.checkout.sessions.retrieve(checkoutBody.data.id);
+      const completedSession = { ...realSession, payment_intent: `pi_test_${crypto.randomUUID()}` };
+      const { payload, signature } = buildSignedEvent("checkout.session.completed", completedSession);
+
+      const webhookResponse = await postWebhook(webhookRequest(payload, signature));
+      expect(webhookResponse.status).toBe(200);
+
+      const { data: order } = await admin
+        .from("orders")
+        .select("id")
+        .eq("stripe_checkout_session_id", checkoutBody.data.id)
+        .single();
+      createdOrderIds.push(order!.id);
+      return order!.id;
+    }
+
+    const firstOrderId = await checkoutAndComplete();
+
+    const { data: referrerCredit } = await admin
+      .from("rewards_ledger")
+      .select("delta_points")
+      .eq("user_id", referrer.id)
+      .eq("reason", "referral_referrer_credit");
+    expect(referrerCredit).toHaveLength(1);
+    expect(referrerCredit![0]!.delta_points).toBe(500);
+
+    const { data: referredCredit } = await admin
+      .from("rewards_ledger")
+      .select("delta_points")
+      .eq("user_id", referred.id)
+      .eq("reason", "referral_referred_credit")
+      .eq("order_id", firstOrderId);
+    expect(referredCredit).toHaveLength(1);
+    expect(referredCredit![0]!.delta_points).toBe(500);
+
+    const { data: referralRow } = await admin
+      .from("referrals")
+      .select("status, reward_issued_at")
+      .eq("referrer_id", referrer.id)
+      .eq("referred_id", referred.id)
+      .single();
+    expect(referralRow!.status).toBe("credited");
+    expect(referralRow!.reward_issued_at).toBeTruthy();
+
+    // Second order from the same referred user - already-credited referral
+    // row is no longer 'pending', so the webhook's own guard must skip it.
+    await checkoutAndComplete();
+
+    const { data: referrerCreditAfterSecondOrder } = await admin
+      .from("rewards_ledger")
+      .select("id")
+      .eq("user_id", referrer.id)
+      .eq("reason", "referral_referrer_credit");
+    expect(referrerCreditAfterSecondOrder).toHaveLength(1);
+
+    const { data: referredCreditAfterSecondOrder } = await admin
+      .from("rewards_ledger")
+      .select("id")
+      .eq("user_id", referred.id)
+      .eq("reason", "referral_referred_credit");
+    expect(referredCreditAfterSecondOrder).toHaveLength(1);
+  }, 30000);
+
+  it("skips referral crediting (leaves it pending) when the referrer and referred account share a stripe_customer_id", async () => {
+    const referrer = await createUser("referrer-shared");
+    const { data: referrerProfile } = await admin
+      .from("profiles")
+      .select("referral_code")
+      .eq("id", referrer.id)
+      .single();
+
+    const referred = await createUser("referred-shared", { referral_code: referrerProfile!.referral_code });
+
+    const sharedCustomerId = `cus_test_shared_${crypto.randomUUID()}`;
+    await admin.from("profiles").update({ stripe_customer_id: sharedCustomerId }).eq("id", referrer.id);
+    await admin.from("profiles").update({ stripe_customer_id: sharedCustomerId }).eq("id", referred.id);
+
+    const response = await postCartItem(
+      cartItemRequest({ itemType: "snack", snackId: sellableSnackId, quantity: 1 }, { token: referred.token })
+    );
+    expect(response.status).toBe(201);
+    const { data: cart } = await admin
+      .from("carts")
+      .select("id")
+      .eq("user_id", referred.id)
+      .eq("status", "active")
+      .single();
+    createdCartIds.push(cart!.id);
+
+    const checkoutResponse = await postCheckoutSession(checkoutSessionRequest({}, { token: referred.token }));
+    const checkoutBody = await checkoutResponse.json();
+    expect(checkoutResponse.status).toBe(201);
+
+    const realSession = await stripe.checkout.sessions.retrieve(checkoutBody.data.id);
+    const completedSession = { ...realSession, payment_intent: `pi_test_${crypto.randomUUID()}` };
+    const { payload, signature } = buildSignedEvent("checkout.session.completed", completedSession);
+
+    const webhookResponse = await postWebhook(webhookRequest(payload, signature));
+    expect(webhookResponse.status).toBe(200);
+
+    const { data: order } = await admin
+      .from("orders")
+      .select("id")
+      .eq("stripe_checkout_session_id", checkoutBody.data.id)
+      .single();
+    createdOrderIds.push(order!.id);
+
+    const { data: referrerCredit } = await admin
+      .from("rewards_ledger")
+      .select("id")
+      .eq("user_id", referrer.id)
+      .eq("reason", "referral_referrer_credit");
+    expect(referrerCredit).toHaveLength(0);
+
+    const { data: referralRow } = await admin
+      .from("referrals")
+      .select("status")
+      .eq("referrer_id", referrer.id)
+      .eq("referred_id", referred.id)
+      .single();
+    expect(referralRow!.status).toBe("pending");
+  }, 20000);
 });

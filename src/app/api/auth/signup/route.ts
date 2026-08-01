@@ -22,6 +22,9 @@ export async function POST(request: NextRequest) {
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
+    ...(parsed.data.referralCode
+      ? { options: { data: { referral_code: parsed.data.referralCode } } }
+      : {}),
   });
 
   if (error) {

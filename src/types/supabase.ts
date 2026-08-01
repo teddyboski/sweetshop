@@ -1094,7 +1094,15 @@ export type Database = {
         Args: { p_drop_id: string; p_qty: number }
         Returns: boolean
       }
+      increment_promotion_used_count: {
+        Args: { p_promotion_id: string }
+        Returns: boolean
+      }
       is_admin: { Args: never; Returns: boolean }
+      redeem_rewards_points: {
+        Args: { p_order_id: string | null; p_points: number; p_user_id: string }
+        Returns: boolean
+      }
       release_inventory_for_cart: {
         Args: { p_cart_id: string }
         Returns: undefined
