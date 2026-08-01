@@ -1,12 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
-export default function SignupPage() {
+function SignupForm() {
+  const searchParams = useSearchParams();
+  const referralCode = searchParams.get("ref");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -19,9 +23,13 @@ export default function SignupPage() {
     setLoading(true);
 
     const supabase = createBrowserSupabaseClient();
+    // Milestone 9: an invalid/unknown code is a silent no-op at the
+    // handle_new_user() trigger - never worth validating or blocking
+    // signup over here.
     const { error: signUpError } = await supabase.auth.signUp({
       email,
       password,
+      ...(referralCode ? { options: { data: { referral_code: referralCode } } } : {}),
     });
 
     setLoading(false);
@@ -92,5 +100,13 @@ export default function SignupPage() {
         </form>
       </CardContent>
     </Card>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<p className="text-sm text-muted-foreground">Loading...</p>}>
+      <SignupForm />
+    </Suspense>
   );
 }

@@ -23,6 +23,15 @@ export default async function CartPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Milestone 9: only fetched for the redeem-points input's balance display -
+  // the actual redemption is re-validated against this same column server-side
+  // at checkout-session creation and again at webhook confirmation.
+  let rewardsBalance = 0;
+  if (user) {
+    const { data: profile } = await admin.from("profiles").select("rewards_points").eq("id", user.id).single();
+    rewardsBalance = profile?.rewards_points ?? 0;
+  }
+
   if (lines.length === 0) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 text-center">
@@ -71,7 +80,7 @@ export default async function CartPage() {
       </div>
 
       <div className="mt-4">
-        <CheckoutButton isAuthenticated={Boolean(user)} />
+        <CheckoutButton isAuthenticated={Boolean(user)} rewardsBalance={rewardsBalance} />
       </div>
     </div>
   );

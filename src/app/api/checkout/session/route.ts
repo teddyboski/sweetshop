@@ -101,6 +101,68 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Milestone 9: promo code and rewards-points redemption, both optional
+  // and independently validated - only existence/expiry/limit is checked
+  // here (the actual usage_limit increment is atomic and deferred to
+  // webhook confirmation via increment_promotion_used_count, since a
+  // Checkout Session that's created but never paid must never have
+  // consumed a promo's limited uses - see plan doc's engineering
+  // decisions). Redemption similarly only debits the real balance at
+  // webhook confirmation via redeem_rewards_points - re-checked there too,
+  // since the balance could change between session creation and payment.
+  let promotionId: string | null = null;
+  let promoDiscountCents = 0;
+  if (parsed.data.promoCode) {
+    const { data: promotion } = await admin
+      .from("promotions")
+      .select("id, discount_type, value, usage_limit, used_count, expires_at")
+      .eq("code", parsed.data.promoCode.toUpperCase())
+      .maybeSingle();
+
+    const isUsable =
+      promotion &&
+      (promotion.usage_limit === null || promotion.used_count < promotion.usage_limit) &&
+      (promotion.expires_at === null || new Date(promotion.expires_at) > new Date());
+
+    if (!isUsable) {
+      return NextResponse.json({ data: null, error: { message: "That promo code isn't valid" } }, { status: 400 });
+    }
+
+    promotionId = promotion.id;
+    promoDiscountCents =
+      promotion.discount_type === "percent"
+        ? Math.round((cart.total.subtotalCents * Number(promotion.value)) / 100)
+        : Math.round(Number(promotion.value));
+  }
+
+  let redeemedPoints = 0;
+  if (parsed.data.redeemPoints) {
+    // Guests never earn rewards (Milestone 6, Decisions #7/#9) - they have
+    // no balance to redeem from either, same scope restriction applied
+    // consistently here.
+    if (!isAuthenticated) {
+      return NextResponse.json(
+        { data: null, error: { message: "Log in to redeem rewards points" } },
+        { status: 400 }
+      );
+    }
+
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("rewards_points")
+      .eq("id", cartResult.userId!)
+      .single();
+
+    if (!profile || profile.rewards_points < parsed.data.redeemPoints) {
+      return NextResponse.json(
+        { data: null, error: { message: "You don't have enough rewards points for that" } },
+        { status: 400 }
+      );
+    }
+
+    redeemedPoints = parsed.data.redeemPoints;
+  }
+
   const { error: reservationError } = await admin.rpc("reserve_inventory_for_cart", {
     p_cart_id: cartResult.cartId,
   });
@@ -132,9 +194,27 @@ export async function POST(request: NextRequest) {
   }
 
   const stripe = createStripeClient();
+
+  // 1 rewards point = 1 cent exactly (Milestone 9, Product Decision #2:
+  // 100 points = $1), so redeemedPoints doubles as the cents value with no
+  // conversion needed. Both discounts stack into a single dynamically
+  // created Coupon - duration: "once" so a subscription-mode session's
+  // discount applies only to the first invoice, never recurring renewals.
+  const totalDiscountCents = Math.min(promoDiscountCents + redeemedPoints, cart.total.totalCents);
+  let couponId: string | undefined;
+  if (totalDiscountCents > 0) {
+    const coupon = await stripe.coupons.create({
+      amount_off: totalDiscountCents,
+      currency: "usd",
+      duration: "once",
+    });
+    couponId = coupon.id;
+  }
+
   const session = await stripe.checkout.sessions.create({
     mode: hasSubscriptionLine ? "subscription" : "payment",
     line_items: lineItems,
+    ...(couponId ? { discounts: [{ coupon: couponId }] } : {}),
     success_url: `${appUrl}/shop/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${appUrl}/shop/cart`,
     customer_email: !isAuthenticated ? parsed.data.guestEmail : undefined,
@@ -147,6 +227,8 @@ export async function POST(request: NextRequest) {
       cart_id: cartResult.cartId,
       ...(cartResult.userId ? { user_id: cartResult.userId } : {}),
       ...(!isAuthenticated && parsed.data.guestEmail ? { guest_email: parsed.data.guestEmail } : {}),
+      ...(promotionId ? { promotion_id: promotionId } : {}),
+      ...(redeemedPoints > 0 ? { redeemed_points: String(redeemedPoints) } : {}),
     },
   });
 

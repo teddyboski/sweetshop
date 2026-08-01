@@ -20,6 +20,8 @@ let userId: string;
 let userToken: string;
 const createdCartIds: string[] = [];
 const inventoryRestores: Array<{ snackId: string; quantity: number }> = [];
+const createdPromotionIds: string[] = [];
+let rewardsBalanceBeforeAll: number;
 
 const email = `test-checkout-${crypto.randomUUID()}@mailinator.com`;
 const password = crypto.randomUUID();
@@ -49,6 +51,9 @@ beforeAll(async () => {
   const { data: session, error: signInError } = await anonAuthClient.auth.signInWithPassword({ email, password });
   if (signInError || !session.session) throw signInError;
   userToken = session.session.access_token;
+
+  const { data: profile } = await admin.from("profiles").select("rewards_points").eq("id", userId).single();
+  rewardsBalanceBeforeAll = profile?.rewards_points ?? 0;
 });
 
 afterAll(async () => {
@@ -65,7 +70,42 @@ afterEach(async () => {
     await admin.from("inventory").update({ quantity_on_hand: quantity }).eq("snack_id", snackId);
   }
   inventoryRestores.length = 0;
+
+  for (const id of createdPromotionIds) {
+    await admin.from("promotions").delete().eq("id", id);
+  }
+  createdPromotionIds.length = 0;
+
+  await admin.from("profiles").update({ rewards_points: rewardsBalanceBeforeAll }).eq("id", userId);
 });
+
+// Milestone 9: mirrors rewards-referrals-foundations.test.ts's seedPromotion
+// helper - a fresh, uniquely-coded row per test so tests never collide.
+async function seedPromotion(
+  overrides: Partial<{
+    discountType: "percent" | "fixed";
+    value: number;
+    usageLimit: number | null;
+    usedCount: number;
+    expiresAt: string | null;
+  }> = {}
+) {
+  const { data, error } = await admin
+    .from("promotions")
+    .insert({
+      code: `TEST${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+      discount_type: overrides.discountType ?? "fixed",
+      value: overrides.value ?? 300,
+      usage_limit: overrides.usageLimit ?? null,
+      used_count: overrides.usedCount ?? 0,
+      expires_at: overrides.expiresAt ?? null,
+    })
+    .select("id, code")
+    .single();
+  if (error || !data) throw error;
+  createdPromotionIds.push(data.id);
+  return data;
+}
 
 function cartItemRequest(body: unknown, opts: { cookie?: string; token?: string } = {}) {
   const headers: Record<string, string> = {};
@@ -210,5 +250,139 @@ describe("POST /api/checkout/session", () => {
       .eq("snack_id", sellableSnackId)
       .single();
     expect(inventoryAfter!.quantity_on_hand).toBe(0);
+  });
+
+  // Milestone 9, Task 3. munchie-box (1500 cents) is used throughout below
+  // because a box line makes hasBox true, which zeroes shipping (see
+  // calculate-total.ts) - so subtotalCents === totalCents === 1500 exactly,
+  // making the expected post-discount amount_total simple arithmetic.
+  it("applies a fixed promo code discount to the session total", async () => {
+    const promotion = await seedPromotion({ discountType: "fixed", value: 300 });
+
+    const boxResponse = await postCartItem(cartItemRequest({ itemType: "box", boxSlug: "munchie-box", quantity: 1 }));
+    const boxBody = await boxResponse.json();
+    const cookieValue = boxResponse.headers.get("set-cookie")!.match(/anonymous_cart_id=([^;]+)/)![1];
+    const { data: cartItem } = await admin.from("cart_items").select("cart_id").eq("id", boxBody.data.cartItemId).single();
+    createdCartIds.push(cartItem!.cart_id);
+
+    const checkoutResponse = await postCheckoutSession(
+      checkoutSessionRequest({ guestEmail: "guest-promo-fixed@example.com", promoCode: promotion.code }, { cookie: cookieValue })
+    );
+    const checkoutBody = await checkoutResponse.json();
+    expect(checkoutResponse.status).toBe(201);
+
+    const session = await stripe.checkout.sessions.retrieve(checkoutBody.data.id);
+    expect(session.amount_total).toBe(1500 - 300);
+    expect(session.metadata?.promotion_id).toBe(promotion.id);
+  });
+
+  it("applies a percent promo code discount to the session total", async () => {
+    const promotion = await seedPromotion({ discountType: "percent", value: 10 });
+
+    const boxResponse = await postCartItem(cartItemRequest({ itemType: "box", boxSlug: "munchie-box", quantity: 1 }));
+    const boxBody = await boxResponse.json();
+    const cookieValue = boxResponse.headers.get("set-cookie")!.match(/anonymous_cart_id=([^;]+)/)![1];
+    const { data: cartItem } = await admin.from("cart_items").select("cart_id").eq("id", boxBody.data.cartItemId).single();
+    createdCartIds.push(cartItem!.cart_id);
+
+    const checkoutResponse = await postCheckoutSession(
+      checkoutSessionRequest({ guestEmail: "guest-promo-percent@example.com", promoCode: promotion.code }, { cookie: cookieValue })
+    );
+    const checkoutBody = await checkoutResponse.json();
+    expect(checkoutResponse.status).toBe(201);
+
+    const session = await stripe.checkout.sessions.retrieve(checkoutBody.data.id);
+    expect(session.amount_total).toBe(1500 - 150); // round(1500 * 10 / 100)
+  });
+
+  it("rejects an expired promo code with 400", async () => {
+    const promotion = await seedPromotion({ expiresAt: new Date(Date.now() - 60_000).toISOString() });
+
+    const boxResponse = await postCartItem(cartItemRequest({ itemType: "box", boxSlug: "munchie-box", quantity: 1 }));
+    const boxBody = await boxResponse.json();
+    const cookieValue = boxResponse.headers.get("set-cookie")!.match(/anonymous_cart_id=([^;]+)/)![1];
+    const { data: cartItem } = await admin.from("cart_items").select("cart_id").eq("id", boxBody.data.cartItemId).single();
+    createdCartIds.push(cartItem!.cart_id);
+
+    const checkoutResponse = await postCheckoutSession(
+      checkoutSessionRequest({ guestEmail: "guest-promo-expired@example.com", promoCode: promotion.code }, { cookie: cookieValue })
+    );
+    expect(checkoutResponse.status).toBe(400);
+  });
+
+  it("rejects a promo code that has already hit its usage limit with 400", async () => {
+    const promotion = await seedPromotion({ usageLimit: 1, usedCount: 1 });
+
+    const boxResponse = await postCartItem(cartItemRequest({ itemType: "box", boxSlug: "munchie-box", quantity: 1 }));
+    const boxBody = await boxResponse.json();
+    const cookieValue = boxResponse.headers.get("set-cookie")!.match(/anonymous_cart_id=([^;]+)/)![1];
+    const { data: cartItem } = await admin.from("cart_items").select("cart_id").eq("id", boxBody.data.cartItemId).single();
+    createdCartIds.push(cartItem!.cart_id);
+
+    const checkoutResponse = await postCheckoutSession(
+      checkoutSessionRequest({ guestEmail: "guest-promo-limit@example.com", promoCode: promotion.code }, { cookie: cookieValue })
+    );
+    expect(checkoutResponse.status).toBe(400);
+  });
+
+  it("rejects an unknown promo code with 400", async () => {
+    const boxResponse = await postCartItem(cartItemRequest({ itemType: "box", boxSlug: "munchie-box", quantity: 1 }));
+    const boxBody = await boxResponse.json();
+    const cookieValue = boxResponse.headers.get("set-cookie")!.match(/anonymous_cart_id=([^;]+)/)![1];
+    const { data: cartItem } = await admin.from("cart_items").select("cart_id").eq("id", boxBody.data.cartItemId).single();
+    createdCartIds.push(cartItem!.cart_id);
+
+    const checkoutResponse = await postCheckoutSession(
+      checkoutSessionRequest({ guestEmail: "guest-promo-unknown@example.com", promoCode: "NOT-A-REAL-CODE" }, { cookie: cookieValue })
+    );
+    expect(checkoutResponse.status).toBe(400);
+  });
+
+  it("rejects redeemPoints from a guest with 400", async () => {
+    const boxResponse = await postCartItem(cartItemRequest({ itemType: "box", boxSlug: "munchie-box", quantity: 1 }));
+    const boxBody = await boxResponse.json();
+    const cookieValue = boxResponse.headers.get("set-cookie")!.match(/anonymous_cart_id=([^;]+)/)![1];
+    const { data: cartItem } = await admin.from("cart_items").select("cart_id").eq("id", boxBody.data.cartItemId).single();
+    createdCartIds.push(cartItem!.cart_id);
+
+    const checkoutResponse = await postCheckoutSession(
+      checkoutSessionRequest({ guestEmail: "guest-redeem@example.com", redeemPoints: 100 }, { cookie: cookieValue })
+    );
+    expect(checkoutResponse.status).toBe(400);
+  });
+
+  it("rejects redeemPoints that exceed the authenticated user's balance with 400", async () => {
+    await admin.from("profiles").update({ rewards_points: 50 }).eq("id", userId);
+
+    const boxResponse = await postCartItem(
+      cartItemRequest({ itemType: "box", boxSlug: "munchie-box", quantity: 1 }, { token: userToken })
+    );
+    expect(boxResponse.status).toBe(201);
+    createdCartIds.push(await cartIdForAuthenticatedUser());
+
+    const checkoutResponse = await postCheckoutSession(checkoutSessionRequest({ redeemPoints: 500 }, { token: userToken }));
+    expect(checkoutResponse.status).toBe(400);
+  });
+
+  it("combines a valid promo code and a points redemption in the same checkout session", async () => {
+    await admin.from("profiles").update({ rewards_points: 1000 }).eq("id", userId);
+    const promotion = await seedPromotion({ discountType: "fixed", value: 200 });
+
+    const boxResponse = await postCartItem(
+      cartItemRequest({ itemType: "box", boxSlug: "munchie-box", quantity: 1 }, { token: userToken })
+    );
+    expect(boxResponse.status).toBe(201);
+    createdCartIds.push(await cartIdForAuthenticatedUser());
+
+    const checkoutResponse = await postCheckoutSession(
+      checkoutSessionRequest({ promoCode: promotion.code, redeemPoints: 300 }, { token: userToken })
+    );
+    const checkoutBody = await checkoutResponse.json();
+    expect(checkoutResponse.status).toBe(201);
+
+    const session = await stripe.checkout.sessions.retrieve(checkoutBody.data.id);
+    expect(session.amount_total).toBe(1500 - 200 - 300); // fixed promo + 1 point = 1 cent
+    expect(session.metadata?.promotion_id).toBe(promotion.id);
+    expect(session.metadata?.redeemed_points).toBe("300");
   });
 });

@@ -3,6 +3,11 @@ import { z } from "zod";
 export const signupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8, "Password must be at least 8 characters"),
+  // Milestone 9: forwarded to Supabase Auth as raw_user_meta_data, read by
+  // the handle_new_user() trigger to link a referral. Optional and never
+  // validated against real profiles here - an invalid/unknown code is a
+  // silent no-op at the DB layer, not a 400 at this layer.
+  referralCode: z.string().trim().min(1).optional(),
 });
 export type SignupInput = z.infer<typeof signupSchema>;
 

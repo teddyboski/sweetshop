@@ -5,6 +5,7 @@ import { createStripeClient } from "@/lib/stripe/client";
 import { sendOrderConfirmationEmail } from "@/lib/email/send-order-confirmation";
 
 const POINTS_PER_DOLLAR = 1; // Milestone 6 plan, Product Decision #9
+const REFERRAL_REWARD_POINTS = 500; // Milestone 9 plan, Product Decision #1
 
 export async function POST(request: NextRequest) {
   const stripe = createStripeClient();
@@ -276,6 +277,102 @@ async function createOrderFromSession(
       .insert({ user_id: userId, event_type: "order_placed", metadata: { order_id: order.id } });
     if (activityError) {
       console.error(`Failed to log order_placed activity for order ${order.id}:`, activityError);
+    }
+  }
+
+  // Milestone 9: promo usage and points redemption are only committed here,
+  // on first delivery (this whole function only runs when no order exists
+  // yet for this session - see handleCheckoutSessionCompleted's own
+  // idempotency comment), never on a webhook redelivery. Both are
+  // re-validated atomically at the DB layer (not just trusted from session
+  // creation), since a promo could hit its limit or a balance could change
+  // in the window between session creation and payment confirmation - if
+  // either guard now fails, the payment has already succeeded, so this
+  // logs and moves on rather than failing the whole order.
+  const promotionId = session.metadata?.promotion_id ?? null;
+  if (promotionId) {
+    const { data: incremented, error: promoError } = await admin.rpc("increment_promotion_used_count", {
+      p_promotion_id: promotionId,
+    });
+    if (promoError || incremented === false) {
+      console.error(`Promotion ${promotionId} usage could not be recorded for order ${order.id} (paid=true):`, promoError);
+    }
+  }
+
+  const redeemedPointsRaw = session.metadata?.redeemed_points;
+  if (userId && redeemedPointsRaw) {
+    const redeemedPoints = Number(redeemedPointsRaw);
+    const { data: redeemed, error: redeemError } = await admin.rpc("redeem_rewards_points", {
+      p_user_id: userId,
+      p_points: redeemedPoints,
+      p_order_id: order.id,
+    });
+    if (redeemError || redeemed === false) {
+      console.error(`Points redemption could not be recorded for order ${order.id} (paid=true):`, redeemError);
+    } else {
+      await admin.from("customer_activity").insert({
+        user_id: userId,
+        event_type: "reward_redeemed",
+        metadata: { order_id: order.id, points: redeemedPoints },
+      });
+    }
+  }
+
+  // Referral crediting: fires on the referred user's qualifying first
+  // purchase - gated on a still-'pending' referrals row, so it can only
+  // ever fire once per referred account (Milestone 9 plan's "cap one
+  // reward per referred account"). Guests are never eligible (no
+  // referred_by relationship possible without an account).
+  if (userId) {
+    const { data: referredProfile } = await admin
+      .from("profiles")
+      .select("referred_by, stripe_customer_id")
+      .eq("id", userId)
+      .single();
+
+    if (referredProfile?.referred_by) {
+      const { data: pendingReferral } = await admin
+        .from("referrals")
+        .select("id")
+        .eq("referred_id", userId)
+        .eq("referrer_id", referredProfile.referred_by)
+        .eq("status", "pending")
+        .maybeSingle();
+
+      if (pendingReferral) {
+        const { data: referrerProfile } = await admin
+          .from("profiles")
+          .select("stripe_customer_id")
+          .eq("id", referredProfile.referred_by)
+          .single();
+
+        // Abuse guard beyond the DB's own referrer_id <> referred_id
+        // constraint: skip (leave pending, no error) if both accounts
+        // share a payment method - see plan doc's engineering decisions.
+        const sharesPaymentMethod =
+          referrerProfile?.stripe_customer_id &&
+          referredProfile.stripe_customer_id &&
+          referrerProfile.stripe_customer_id === referredProfile.stripe_customer_id;
+
+        if (!sharesPaymentMethod) {
+          await admin.rpc("credit_rewards_points", {
+            p_user_id: referredProfile.referred_by,
+            p_delta_points: REFERRAL_REWARD_POINTS,
+            p_reason: "referral_referrer_credit",
+            p_order_id: null,
+          });
+          await admin.rpc("credit_rewards_points", {
+            p_user_id: userId,
+            p_delta_points: REFERRAL_REWARD_POINTS,
+            p_reason: "referral_referred_credit",
+            p_order_id: order.id,
+          });
+          await admin
+            .from("referrals")
+            .update({ status: "credited", reward_issued_at: new Date().toISOString() })
+            .eq("id", pendingReferral.id);
+        }
+      }
     }
   }
 
