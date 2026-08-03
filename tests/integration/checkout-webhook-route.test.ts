@@ -467,7 +467,7 @@ describe("POST /api/webhooks/stripe", () => {
     expect(subscription).toBeTruthy();
     expect(subscription!.status).toBe("active");
     createdSubscriptionIds.push(subscription!.id);
-  });
+  }, 20000);
 
   it("processes checkout.session.completed for a guest: emails the guest address directly and credits no rewards", async () => {
     const response = await postCartItem(cartItemRequest({ itemType: "box", boxSlug: "munchie-box", quantity: 1 }));

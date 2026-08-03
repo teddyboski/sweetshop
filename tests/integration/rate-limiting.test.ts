@@ -50,17 +50,24 @@ describe("check_rate_limit", () => {
   it("resets once the window elapses", async () => {
     const key = `test-rl-${crypto.randomUUID()}`;
 
-    const { data: first } = await admin.rpc("check_rate_limit", { p_key: key, p_limit: 1, p_window_seconds: 1 });
+    // A 3s window (not 1s) so two sequential real network round-trips to
+    // the hosted Supabase instance can't accidentally straddle the window
+    // boundary and make this test flaky - this suite's own round-trip times
+    // range from ~250ms to several seconds under load, so a 1s window was
+    // too tight for a check that isn't itself the thing under test here.
+    const windowSeconds = 3;
+
+    const { data: first } = await admin.rpc("check_rate_limit", { p_key: key, p_limit: 1, p_window_seconds: windowSeconds });
     expect(first).toBe(true);
 
-    const { data: secondSameWindow } = await admin.rpc("check_rate_limit", { p_key: key, p_limit: 1, p_window_seconds: 1 });
+    const { data: secondSameWindow } = await admin.rpc("check_rate_limit", { p_key: key, p_limit: 1, p_window_seconds: windowSeconds });
     expect(secondSameWindow).toBe(false);
 
-    await new Promise((resolve) => setTimeout(resolve, 1_100));
+    await new Promise((resolve) => setTimeout(resolve, windowSeconds * 1000 + 500));
 
-    const { data: afterWindow } = await admin.rpc("check_rate_limit", { p_key: key, p_limit: 1, p_window_seconds: 1 });
+    const { data: afterWindow } = await admin.rpc("check_rate_limit", { p_key: key, p_limit: 1, p_window_seconds: windowSeconds });
     expect(afterWindow).toBe(true);
-  });
+  }, 10000);
 
   it("succeeds repeatedly with no error when called well under the limit", async () => {
     const key = `test-rl-${crypto.randomUUID()}`;
