@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
 import { resetPasswordSchema } from "@/lib/validations/auth";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit/check";
 
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = await checkRateLimit(request, RATE_LIMITS.auth);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const authHeader = request.headers.get("authorization");
   const token = authHeader?.match(/^Bearer (.+)$/)?.[1];
   if (!token) {

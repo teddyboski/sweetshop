@@ -843,6 +843,33 @@ export type Database = {
         }
         Relationships: []
       }
+      rate_limit_hits: {
+        Row: {
+          created_at: string
+          hit_count: number
+          id: string
+          key: string
+          updated_at: string
+          window_start: string
+        }
+        Insert: {
+          created_at?: string
+          hit_count?: number
+          id?: string
+          key: string
+          updated_at?: string
+          window_start: string
+        }
+        Update: {
+          created_at?: string
+          hit_count?: number
+          id?: string
+          key?: string
+          updated_at?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       referrals: {
         Row: {
           created_at: string
@@ -1080,6 +1107,10 @@ export type Database = {
           p_snack_id: string
         }
         Returns: undefined
+      }
+      check_rate_limit: {
+        Args: { p_key: string; p_limit: number; p_window_seconds: number }
+        Returns: boolean
       }
       credit_rewards_points: {
         Args: {

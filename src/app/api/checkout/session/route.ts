@@ -5,6 +5,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createStripeClient } from "@/lib/stripe/client";
 import { resolveExistingCartId } from "@/lib/cart/resolve-cart";
 import { getCartContents, type CartLine } from "@/lib/supabase/queries/cart";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit/check";
 
 /**
  * V1 only ever seeds 'monthly' cadence (see the subscription box seed
@@ -54,6 +55,9 @@ function lineItemFor(line: CartLine): Stripe.Checkout.SessionCreateParams.LineIt
 }
 
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = await checkRateLimit(request, RATE_LIMITS.checkout);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const body = await request.json().catch(() => null);
   const parsed = createCheckoutSessionSchema.safeParse(body);
   if (!parsed.success) {

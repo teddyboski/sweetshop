@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "backfill:legacy-orders": "tsx scripts/backfill-legacy-orders.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -43,6 +44,7 @@
     "eslint-config-next": "16.2.10",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4",
+    "tsx": "^4.20.6",
     "typescript": "^5",
     "vitest": "^4.1.10"
   }

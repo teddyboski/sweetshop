@@ -1,8 +1,18 @@
 // @vitest-environment node
-import { describe, it, expect, beforeAll, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { POST } from "@/app/api/cart/items/route";
+
+// Milestone 10: this file exercises this route many times in-process from
+// the same "local-dev" IP key, which would trip the real rate limit long
+// before the loop finishes. Rate limiting has its own dedicated coverage
+// (tests/unit/rate-limit-check.test.ts, tests/integration/rate-limiting.test.ts)
+// - mocked out here so this file stays focused on cart logic.
+vi.mock("@/lib/rate-limit/check", () => ({
+  checkRateLimit: async () => null,
+  RATE_LIMITS: { checkout: { scope: "checkout", limit: 30, windowSeconds: 60 } },
+}));
 
 const admin = createAdminSupabaseClient();
 
