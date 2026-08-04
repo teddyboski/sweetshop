@@ -38,9 +38,30 @@ export interface BackfillSummary {
   skippedErrors: Array<{ paymentIntentId: string; message: string }>;
 }
 
-function extractEmailFromCharges(paymentIntent: Stripe.PaymentIntent): string | null {
-  const charges = (paymentIntent as unknown as { charges?: { data: Stripe.Charge[] } }).charges;
-  return charges?.data?.[0]?.billing_details?.email ?? null;
+// The PaymentIntent list endpoint doesn't embed charge/customer data by
+// default (and modern API versions dropped the old `charges` collection
+// entirely in favor of `latest_charge`) - both must be explicitly expanded
+// on the list() call below, or every one of these lookups silently returns
+// nothing even for real, fully-populated charges. Checked in order:
+// receipt_email (rarely set unless explicitly passed at confirm time) ->
+// the actual charge's billing email (the real source of truth for most
+// card payments) -> the attached Customer object's email, if any.
+function extractEmail(paymentIntent: Stripe.PaymentIntent): string | null {
+  if (paymentIntent.receipt_email) return paymentIntent.receipt_email;
+
+  const latestCharge = paymentIntent.latest_charge;
+  if (latestCharge && typeof latestCharge !== "string") {
+    const chargeEmail = latestCharge.billing_details?.email;
+    if (chargeEmail) return chargeEmail;
+  }
+
+  const customer = paymentIntent.customer;
+  if (customer && typeof customer !== "string" && !("deleted" in customer && customer.deleted)) {
+    const customerEmail = (customer as Stripe.Customer).email;
+    if (customerEmail) return customerEmail;
+  }
+
+  return null;
 }
 
 export async function runBackfill(
@@ -63,6 +84,7 @@ export async function runBackfill(
     const page: Stripe.ApiList<Stripe.PaymentIntent> = await stripe.paymentIntents.list({
       limit: BATCH_SIZE,
       starting_after: startingAfter,
+      expand: ["data.latest_charge", "data.customer"],
     });
 
     for (const paymentIntent of page.data) {
@@ -75,7 +97,7 @@ export async function runBackfill(
       summary.succeededSeen++;
 
       try {
-        const email = paymentIntent.receipt_email ?? extractEmailFromCharges(paymentIntent);
+        const email = extractEmail(paymentIntent);
         if (!email) {
           summary.skippedErrors.push({
             paymentIntentId: paymentIntent.id,
