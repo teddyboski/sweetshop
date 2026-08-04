@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, beforeAll, afterEach, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/supabase";
@@ -7,6 +7,19 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createStripeClient } from "@/lib/stripe/client";
 import { POST as postCartItem } from "@/app/api/cart/items/route";
 import { POST as postCheckoutSession } from "@/app/api/checkout/session/route";
+
+// Milestone 10: this file exercises both routes many times in-process from
+// the same "local-dev" IP key, which would trip the real rate limit long
+// before the suite finishes. Rate limiting has its own dedicated coverage
+// (tests/unit/rate-limit-check.test.ts, tests/integration/rate-limiting.test.ts)
+// - mocked out here so this file stays focused on checkout logic.
+vi.mock("@/lib/rate-limit/check", () => ({
+  checkRateLimit: async () => null,
+  RATE_LIMITS: {
+    checkout: { scope: "checkout", limit: 30, windowSeconds: 60 },
+    auth: { scope: "auth", limit: 60, windowSeconds: 600 },
+  },
+}));
 
 // See rls-cross-user.test.ts's header comment: never call a session-mutating
 // auth method on the admin client itself - use a separate plain client to

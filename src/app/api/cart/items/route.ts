@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { addToCartSchema } from "@/lib/validations/cart";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { resolveCartId, ANONYMOUS_CART_COOKIE } from "@/lib/cart/resolve-cart";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit/check";
 
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = await checkRateLimit(request, RATE_LIMITS.checkout);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const body = await request.json().catch(() => null);
   const parsed = addToCartSchema.safeParse(body);
 

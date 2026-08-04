@@ -12,6 +12,15 @@ vi.mock("@supabase/supabase-js", () => ({
   }),
 }));
 
+// Milestone 10: rate limiting is its own concern with its own dedicated
+// test coverage (tests/unit/rate-limit-check.test.ts,
+// tests/integration/rate-limiting.test.ts) - mocked out here so this file
+// stays focused on login logic, same as every other auth route test.
+vi.mock("@/lib/rate-limit/check", () => ({
+  checkRateLimit: async () => null,
+  RATE_LIMITS: { auth: { scope: "auth", limit: 60, windowSeconds: 600 } },
+}));
+
 beforeEach(() => {
   mockSignInWithPassword.mockReset();
 });
