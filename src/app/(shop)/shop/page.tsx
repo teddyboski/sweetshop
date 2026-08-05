@@ -96,7 +96,7 @@ export default async function ShopHome({ searchParams }: ShopPageProps) {
                 {boxes.map((box) => (
                   <Link key={box.id} href={`/shop/box/${box.slug}`}>
                     <Card>
-                      <ProductImage imageUrl={null} alt={box.title} />
+                      <ProductImage imageUrl={box.imageUrl} alt={box.title} />
                       <CardHeader>
                         <CardTitle>{box.title}</CardTitle>
                         <CardDescription>{formatPriceCents(box.price_cents)}</CardDescription>
@@ -115,7 +115,7 @@ export default async function ShopHome({ searchParams }: ShopPageProps) {
                 {snacks.map((snack) => (
                   <Link key={snack.id} href={`/shop/snack/${snack.slug}`}>
                     <Card size="sm">
-                      <ProductImage imageUrl={null} alt={snack.name} />
+                      <ProductImage imageUrl={snack.imageUrl} alt={snack.name} />
                       <CardHeader>
                         <CardTitle>{snack.name}</CardTitle>
                         <CardDescription>{formatPriceCents(snack.price_cents ?? 0)}</CardDescription>
