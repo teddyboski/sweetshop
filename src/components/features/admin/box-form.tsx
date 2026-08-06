@@ -25,6 +25,7 @@ export function BoxForm({ box }: BoxFormProps) {
   const [boxType, setBoxType] = useState(box?.box_type ?? "curated");
   const [slotCount, setSlotCount] = useState(box?.slot_count ? String(box.slot_count) : "");
   const [status, setStatus] = useState(box?.status ?? "draft");
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -50,13 +51,30 @@ export function BoxForm({ box }: BoxFormProps) {
       body: JSON.stringify(payload),
     });
     const body = await response.json();
-    setSaving(false);
 
     if (!response.ok) {
+      setSaving(false);
       setError(body.error ?? "Save failed");
       return;
     }
 
+    const boxId = isEditing ? box!.id : body.data.id;
+
+    if (imageFile) {
+      const formData = new FormData();
+      formData.append("file", imageFile);
+      formData.append("boxId", boxId);
+      formData.append("isPrimary", "true");
+      const uploadResponse = await authenticatedFetch("/api/admin/uploads", { method: "POST", body: formData });
+      if (!uploadResponse.ok) {
+        const uploadBody = await uploadResponse.json();
+        setSaving(false);
+        setError(uploadBody.error ?? "Image upload failed");
+        return;
+      }
+    }
+
+    setSaving(false);
     router.push("/admin/boxes");
     router.refresh();
   }
@@ -112,6 +130,16 @@ export function BoxForm({ box }: BoxFormProps) {
           <option value="active">Active</option>
           <option value="archived">Archived</option>
         </select>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="image" className="text-sm font-medium">Photo (JPEG/PNG/WebP, max 5 MB)</label>
+        <input
+          id="image"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+          className="text-sm"
+        />
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <Button type="submit" disabled={saving}>
