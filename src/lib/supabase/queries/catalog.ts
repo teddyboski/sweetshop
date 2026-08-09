@@ -110,6 +110,33 @@ export async function getDropById(id: string) {
   return data;
 }
 
+/**
+ * Milestone 12 (mobile): the web app has never had a "browse all live
+ * drops" page - drops/[id] only exists as a direct link, no listing query.
+ * Added here because the mobile Drops screen needs one and nothing to
+ * mirror exists yet. "Active" means not yet ended (ends_at in the future),
+ * which deliberately includes not-yet-started drops (countdown to start)
+ * alongside currently-live ones - the client's own getDropWindowStatus-
+ * equivalent decides isBeforeStart/isSoldOut per row, same split web's
+ * drops/[id] page already does for a single drop.
+ */
+export async function getActiveDrops() {
+  const supabase = createPublicSupabaseClient();
+  const { data, error } = await supabase
+    .from("drops")
+    .select("id, box_id, starts_at, ends_at, quantity_limit, units_sold, boxes(slug, title, price_cents, status, product_images(image_url, is_primary))")
+    .gt("ends_at", new Date().toISOString())
+    .order("starts_at");
+  if (error) throw error;
+  return data
+    .filter((drop) => drop.boxes && drop.boxes.status === "active")
+    .map((drop) => {
+      const { boxes, ...rest } = drop;
+      const { product_images, status, ...box } = boxes!;
+      return { ...rest, box: { ...box, imageUrl: primaryImageUrl(product_images) } };
+    });
+}
+
 export async function searchCatalog(query: string) {
   const supabase = createPublicSupabaseClient();
   const [boxes, snacks] = await Promise.all([
