@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "Sweet Shop",
+    "slug": "sweetshop-1",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sweetshopcentral.app"
+    },
+    "android": {
+      "package": "com.sweetshopcentral.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFBF5",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#FFFBF5"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "0f9b2f5d-5362-424e-bf7b-81e43e010843"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/0f9b2f5d-5362-424e-bf7b-81e43e010843"
+    }
+  }
+}

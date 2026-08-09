@@ -74,4 +74,10 @@ export async function checkRateLimit(
 export const RATE_LIMITS = {
   auth: { scope: "auth", limit: 60, windowSeconds: 600 } satisfies RateLimitConfig,
   checkout: { scope: "checkout", limit: 30, windowSeconds: 60 } satisfies RateLimitConfig,
+  // Milestone 12 (mobile): read-only catalog browsing, no server-side cache
+  // in front of it the way ISR gives the web pages. Generous since normal
+  // browsing (scrolling a grid, opening detail screens, typing a search)
+  // can easily fire a dozen+ requests a minute - this is abuse protection,
+  // not a browsing-pace limiter.
+  catalog: { scope: "catalog", limit: 300, windowSeconds: 60 } satisfies RateLimitConfig,
 } as const;
