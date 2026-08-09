@@ -2,9 +2,27 @@ import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "./src/lib/auth/auth-context";
 import { RootTabs } from "./src/navigation/RootTabs";
 import { colors } from "./src/theme";
+
+/**
+ * Milestone 12: one shared client for all catalog reads. staleTime is
+ * intentionally not 0 - catalog data (boxes/snacks/drops) changes rarely
+ * enough that refetching on every screen focus would just be wasted
+ * requests against the rate limit budget; 60s roughly matches the web
+ * shop pages' own `revalidate: 60` ISR window, so both platforms are
+ * "at most a minute stale" by the same standard.
+ */
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60 * 1000,
+      retry: 1,
+    },
+  },
+});
 
 const navigationTheme = {
   ...DefaultTheme,
@@ -43,12 +61,14 @@ function AppShell() {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <AppShell />
-      </AuthProvider>
-      <StatusBar style="auto" />
-    </SafeAreaProvider>
+    <QueryClientProvider client={queryClient}>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <AppShell />
+        </AuthProvider>
+        <StatusBar style="auto" />
+      </SafeAreaProvider>
+    </QueryClientProvider>
   );
 }
 
