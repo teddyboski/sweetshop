@@ -15,6 +15,9 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Git worktrees (nested copies of the repo, not source to lint):
     ".claude/worktrees/**",
+    // Self-contained Expo/React Native project with its own lint/type
+    // setup - not part of the Next.js app being linted here.
+    "mobile/**",
   ]),
 ]);
 
