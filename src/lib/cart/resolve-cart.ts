@@ -24,6 +24,69 @@ function getAnonymousIdFromRequest(request: NextRequest): string | undefined {
   return request.cookies.get(ANONYMOUS_CART_COOKIE)?.value ?? request.headers.get(ANONYMOUS_CART_HEADER) ?? undefined;
 }
 
+/**
+ * Fulfills a promise the mobile roadmap made for Milestone 13 ("anonymous
+ * ID... synced to user_id post-auth") that turned out to have never
+ * actually been implemented for web either - resolveCartId only ever
+ * looked up a cart by user_id, never by the anonymous id the caller might
+ * still be carrying, so a guest's cart was silently orphaned on login or
+ * signup (a new, empty user cart gets created/found instead). Called from
+ * both resolveCartId and resolveExistingCartId whenever a request carries
+ * both a valid bearer token and an anonymous id - no caller (web cookie,
+ * mobile SecureStore) has to remember to trigger this separately, it just
+ * happens on the very next cart-touching request after sign-in.
+ *
+ * Merge policy (Ted, 2026-08-09): combine, never discard. Every cart_items
+ * row from the anonymous cart is reparented onto the account's cart as-is
+ * - deliberately not summed into any "matching" existing line, since
+ * nothing else in this codebase treats two separate cart_items rows for
+ * the same box/snack as needing consolidation either (re-adding an
+ * already-in-cart item today just inserts a second row; quantity only
+ * ever changes via an explicit PATCH by cart_item id). Reparenting keeps
+ * this merge consistent with that existing behavior rather than inventing
+ * a new rule found nowhere else in the cart code.
+ *
+ * Returns void and never throws - callers proceed with their normal
+ * cart-lookup query immediately after, which will simply find whatever
+ * this left behind (the promoted/augmented cart, or nothing different at
+ * all if there was no anonymous cart to merge). A failure here fails open
+ * for the same reason checkRateLimit does: losing the merge opportunity on
+ * a transient DB error is far better than blocking the request entirely.
+ */
+async function mergeAnonymousCartIntoUserCart(
+  admin: ReturnType<typeof createAdminSupabaseClient>,
+  anonymousId: string,
+  userId: string
+): Promise<void> {
+  const { data: anonymousCart } = await admin
+    .from("carts")
+    .select("id")
+    .eq("anonymous_id", anonymousId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (!anonymousCart) return;
+
+  const { data: userCart } = await admin
+    .from("carts")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (!userCart) {
+    // No existing account cart yet - the common case (first login after
+    // guest browsing). Promote the anonymous cart in place rather than
+    // copying rows into a freshly-created one.
+    await admin.from("carts").update({ user_id: userId, anonymous_id: null }).eq("id", anonymousCart.id);
+    return;
+  }
+
+  if (userCart.id === anonymousCart.id) return; // defensive; shouldn't happen (anonymous_id and user_id are never both set on one row)
+
+  await admin.from("cart_items").update({ cart_id: userCart.id }).eq("cart_id", anonymousCart.id);
+  await admin.from("carts").update({ status: "abandoned" }).eq("id", anonymousCart.id);
+}
+
 export interface CartResolution {
   cartId?: string;
   userId?: string;
@@ -63,6 +126,11 @@ export async function resolveCartId(
 
     if (!user) {
       return { error: "Invalid or expired session", status: 401 };
+    }
+
+    const anonymousIdToMerge = getAnonymousIdFromRequest(request);
+    if (anonymousIdToMerge) {
+      await mergeAnonymousCartIntoUserCart(admin, anonymousIdToMerge, user.id);
     }
 
     const { data: existingCart } = await admin
@@ -106,6 +174,16 @@ export async function resolveCartId(
  * PATCH/DELETE on an existing cart_item, where "no cart yet" simply means
  * the caller can't own the item they're referencing (404, not a reason to
  * mint a brand-new empty cart as a side effect of an ownership check).
+ *
+ * One deliberate exception to "without creating/changing anything": if the
+ * caller is authenticated and still carries an anonymous id, this still
+ * merges that anonymous cart into the account's cart first (see
+ * mergeAnonymousCartIntoUserCart's header comment). That's not the same
+ * kind of side effect this function's name warns against - it's not
+ * speculatively creating a new empty cart, it's attaching cart rows the
+ * caller's own guest session already owned, which is what makes a
+ * subsequent GET /api/cart or checkout call correctly see items that would
+ * otherwise look silently lost after login.
  */
 export async function resolveExistingCartId(
   request: NextRequest,
@@ -126,6 +204,11 @@ export async function resolveExistingCartId(
 
     if (!user) {
       return { error: "Invalid or expired session", status: 401 };
+    }
+
+    const anonymousIdToMerge = getAnonymousIdFromRequest(request);
+    if (anonymousIdToMerge) {
+      await mergeAnonymousCartIntoUserCart(admin, anonymousIdToMerge, user.id);
     }
 
     const { data: existingCart } = await admin
@@ -166,6 +249,17 @@ export async function resolveCartIdForPage(
   } = await supabase.auth.getUser();
 
   if (user) {
+    // Same merge as resolveCartId/resolveExistingCartId - this Server
+    // Component path reads next/headers' cookies() directly rather than
+    // going through either of those Route-Handler resolvers, so it needs
+    // its own call or a freshly-logged-in user visiting /shop/cart would
+    // still see an empty cart despite the API-side fix.
+    const cookieStoreForMerge = await cookies();
+    const anonymousIdToMerge = cookieStoreForMerge.get(ANONYMOUS_CART_COOKIE)?.value;
+    if (anonymousIdToMerge) {
+      await mergeAnonymousCartIntoUserCart(admin, anonymousIdToMerge, user.id);
+    }
+
     const { data: existingCart } = await admin
       .from("carts")
       .select("id")
