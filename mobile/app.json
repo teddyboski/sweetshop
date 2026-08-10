@@ -32,7 +32,14 @@
           "resizeMode": "contain",
           "backgroundColor": "#FFFBF5"
         }
-      ]
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "enableGooglePay": false
+        }
+      ],
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {

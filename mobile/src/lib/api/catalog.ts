@@ -49,6 +49,16 @@ export interface CatalogDrop {
   box: { slug: string; title: string; price_cents: number; imageUrl: string | null };
 }
 
+export interface ByoSnack {
+  id: string;
+  slug: string;
+  name: string;
+  brand: string | null;
+  category: string | null;
+  tags: string[] | null;
+  price_cents: number | null;
+}
+
 export interface SearchResults {
   boxes: Array<Pick<CatalogBox, "id" | "slug" | "title" | "price_cents" | "imageUrl">>;
   snacks: Array<Pick<CatalogSnack, "id" | "slug" | "name" | "price_cents" | "imageUrl">>;
@@ -99,4 +109,9 @@ export async function searchCatalog(query: string): Promise<SearchResults> {
 export async function fetchActiveDrops(): Promise<CatalogDrop[]> {
   const response = await authenticatedFetch("/api/catalog/drops");
   return unwrapEnvelope<CatalogDrop[]>(response);
+}
+
+export async function fetchByoSnacks(): Promise<ByoSnack[]> {
+  const response = await authenticatedFetch("/api/catalog/byo-snacks");
+  return unwrapEnvelope<ByoSnack[]>(response);
 }

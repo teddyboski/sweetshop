@@ -8,9 +8,28 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const ANONYMOUS_CART_COOKIE = "anonymous_cart_id";
 
+/**
+ * Milestone 13 (mobile): a Set-Cookie response header is the web-only half
+ * of anonymous-cart persistence - browsers store and replay it
+ * automatically, but there's no equivalent guarantee for React Native's
+ * fetch (no shared cookie jar contract the way a browser has one). Mirrors
+ * the Authorization-bearer-token precedent exactly: an explicit header the
+ * client itself is responsible for storing and replaying (SecureStore
+ * instead of a cookie) and reading back out of the JSON response body
+ * (anonymousCartId below) rather than a header it may not reliably see.
+ */
+const ANONYMOUS_CART_HEADER = "x-anonymous-cart-id";
+
+function getAnonymousIdFromRequest(request: NextRequest): string | undefined {
+  return request.cookies.get(ANONYMOUS_CART_COOKIE)?.value ?? request.headers.get(ANONYMOUS_CART_HEADER) ?? undefined;
+}
+
 export interface CartResolution {
   cartId?: string;
   userId?: string;
+  /** The anonymous id actually in use for this request, new or existing - always set on a successful anonymous resolution, so any caller can echo it back for a mobile client to persist. */
+  anonymousCartId?: string;
+  /** Web-only: set only when a *new* anonymous id was minted, so the route handler knows to also emit a Set-Cookie. */
   newAnonymousCookie?: string;
   error?: string;
   status?: number;
@@ -59,7 +78,7 @@ export async function resolveCartId(
     return { cartId: newCart.id };
   }
 
-  const existingAnonymousId = request.cookies.get(ANONYMOUS_CART_COOKIE)?.value;
+  const existingAnonymousId = getAnonymousIdFromRequest(request);
 
   if (existingAnonymousId) {
     const { data: existingCart } = await admin
@@ -68,7 +87,7 @@ export async function resolveCartId(
       .eq("anonymous_id", existingAnonymousId)
       .eq("status", "active")
       .maybeSingle();
-    if (existingCart) return { cartId: existingCart.id };
+    if (existingCart) return { cartId: existingCart.id, anonymousCartId: existingAnonymousId };
   }
 
   const newAnonymousId = crypto.randomUUID();
@@ -79,7 +98,7 @@ export async function resolveCartId(
     .single();
   if (error || !newCart) return { error: "Could not create cart", status: 500 };
 
-  return { cartId: newCart.id, newAnonymousCookie: newAnonymousId };
+  return { cartId: newCart.id, anonymousCartId: newAnonymousId, newAnonymousCookie: newAnonymousId };
 }
 
 /**
@@ -118,7 +137,7 @@ export async function resolveExistingCartId(
     return { cartId: existingCart?.id, userId: user.id };
   }
 
-  const existingAnonymousId = request.cookies.get(ANONYMOUS_CART_COOKIE)?.value;
+  const existingAnonymousId = getAnonymousIdFromRequest(request);
   if (!existingAnonymousId) return {};
 
   const { data: existingCart } = await admin
@@ -128,7 +147,7 @@ export async function resolveExistingCartId(
     .eq("status", "active")
     .maybeSingle();
 
-  return { cartId: existingCart?.id };
+  return { cartId: existingCart?.id, anonymousCartId: existingAnonymousId };
 }
 
 /**

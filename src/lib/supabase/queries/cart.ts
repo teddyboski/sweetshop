@@ -13,6 +13,15 @@ export interface CartLine {
   isSubscription: boolean;
   cadence: string | null;
   snackSelections?: Array<{ snackId: string; name: string; quantity: number }>;
+  /**
+   * The actual boxes.id / snacks.id (not this cart_item's own id) - added
+   * Milestone 13 so the mobile PaymentIntent webhook handler can build
+   * order_items directly from cart contents without a second query. Every
+   * existing caller of getCartContents ignores unrecognized fields, so this
+   * is purely additive.
+   */
+  boxId: string | null;
+  snackId: string | null;
 }
 
 export interface CartContents {
@@ -66,6 +75,8 @@ export async function getCartContents(cartId: string): Promise<CartContents> {
         isSubscription: item.boxes.is_subscription,
         cadence: item.boxes.cadence,
         snackSelections,
+        boxId: item.box_id,
+        snackId: null,
       });
     } else if (item.item_type === "snack" && item.snacks) {
       lines.push({
@@ -79,6 +90,8 @@ export async function getCartContents(cartId: string): Promise<CartContents> {
         slotCount: null,
         isSubscription: false,
         cadence: null,
+        boxId: null,
+        snackId: item.snack_id,
       });
     }
   }

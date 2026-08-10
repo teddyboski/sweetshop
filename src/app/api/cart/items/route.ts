@@ -67,7 +67,14 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const response = NextResponse.json({ data: { cartItemId: cartItem.id }, error: null }, { status: 201 });
+  // anonymousCartId is echoed in the body (not just the Set-Cookie below)
+  // so a mobile client - which can't rely on cookie-jar persistence the
+  // way a browser can - has an explicit value to save in SecureStore and
+  // replay via the X-Anonymous-Cart-Id header on every later cart call.
+  const response = NextResponse.json(
+    { data: { cartItemId: cartItem.id, anonymousCartId: cartResult.anonymousCartId ?? null }, error: null },
+    { status: 201 }
+  );
 
   if (cartResult.newAnonymousCookie) {
     response.cookies.set(ANONYMOUS_CART_COOKIE, cartResult.newAnonymousCookie, {

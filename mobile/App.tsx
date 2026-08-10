@@ -3,9 +3,18 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { StripeProvider } from "@stripe/stripe-react-native";
 import { AuthProvider, useAuth } from "./src/lib/auth/auth-context";
 import { RootTabs } from "./src/navigation/RootTabs";
 import { colors } from "./src/theme";
+
+const stripePublishableKey = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+if (!stripePublishableKey) {
+  throw new Error(
+    "Missing EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY. Copy .env.example to .env.local and fill it in " +
+      "with the same value as the web app's NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.",
+  );
+}
 
 /**
  * Milestone 12: one shared client for all catalog reads. staleTime is
@@ -61,14 +70,16 @@ function AppShell() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <SafeAreaProvider>
-        <AuthProvider>
-          <AppShell />
-        </AuthProvider>
-        <StatusBar style="auto" />
-      </SafeAreaProvider>
-    </QueryClientProvider>
+    <StripeProvider publishableKey={stripePublishableKey!}>
+      <QueryClientProvider client={queryClient}>
+        <SafeAreaProvider>
+          <AuthProvider>
+            <AppShell />
+          </AuthProvider>
+          <StatusBar style="auto" />
+        </SafeAreaProvider>
+      </QueryClientProvider>
+    </StripeProvider>
   );
 }
 

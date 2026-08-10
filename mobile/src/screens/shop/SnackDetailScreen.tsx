@@ -1,8 +1,9 @@
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useQuery } from "@tanstack/react-query";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRoute, type RouteProp } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { fetchSnackBySlug } from "../../lib/api/catalog";
+import { addSnackToCart } from "../../lib/api/cart";
 import { ProductImage } from "../../components/shared/ProductImage";
 import { formatPriceCents } from "../../lib/utils/format";
 import { colors, radii, spacing, typography } from "../../theme";
@@ -10,15 +11,18 @@ import type { ShopStackParamList } from "../../navigation/ShopStack";
 
 type Route = RouteProp<ShopStackParamList, "SnackDetail">;
 
-/**
- * Mirrors (shop)/shop/snack/[slug]/page.tsx. No Add to Cart yet - same
- * Milestone 12/13 scope split as BoxDetailScreen.
- */
+/** Mirrors (shop)/shop/snack/[slug]/page.tsx, now with a working Add to Cart (Milestone 13). */
 export function SnackDetailScreen() {
   const { params } = useRoute<Route>();
+  const queryClient = useQueryClient();
   const { data: snack, isPending, isError } = useQuery({
     queryKey: ["catalog", "snack", params.slug],
     queryFn: () => fetchSnackBySlug(params.slug),
+  });
+
+  const addMutation = useMutation({
+    mutationFn: (snackId: string) => addSnackToCart(snackId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart"] }),
   });
 
   if (isPending) {
@@ -59,6 +63,17 @@ export function SnackDetailScreen() {
           ))}
         </View>
       )}
+
+      <Pressable
+        style={styles.addButton}
+        disabled={addMutation.isPending}
+        onPress={() => addMutation.mutate(snack.id)}
+      >
+        <Text style={styles.addButtonText}>
+          {addMutation.isPending ? "Adding..." : addMutation.isSuccess ? "Added ✓" : "Add to Cart"}
+        </Text>
+      </Pressable>
+      {addMutation.isError && <Text style={styles.errorText}>{addMutation.error.message}</Text>}
     </ScrollView>
   );
 }
@@ -113,6 +128,23 @@ const styles = StyleSheet.create({
     ...typography.sizes.xs,
     color: colors.foreground,
     textTransform: "capitalize",
+  },
+  addButton: {
+    marginTop: spacing.xl,
+    backgroundColor: colors.primary,
+    borderRadius: radii.full,
+    paddingVertical: spacing.md,
+    alignItems: "center",
+  },
+  addButtonText: {
+    ...typography.sizes.base,
+    fontFamily: typography.fontFamilyMedium,
+    color: colors.primaryForeground,
+  },
+  errorText: {
+    ...typography.sizes.sm,
+    color: colors.destructive,
+    marginTop: spacing.sm,
   },
   centerState: {
     flex: 1,
