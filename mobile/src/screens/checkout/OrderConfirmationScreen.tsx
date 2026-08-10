@@ -4,6 +4,7 @@ import { useNavigation, useRoute, type RouteProp } from "@react-navigation/nativ
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchOrderConfirmation } from "../../lib/api/orders";
+import { registerForPushNotifications } from "../../lib/push/register";
 import { formatPriceCents } from "../../lib/utils/format";
 import { colors, radii, spacing, typography } from "../../theme";
 import type { CartStackParamList } from "../../navigation/CartStack";
@@ -45,6 +46,11 @@ export function OrderConfirmationScreen() {
   useEffect(() => {
     if (data?.status === "ready") {
       queryClient.invalidateQueries({ queryKey: ["cart"] });
+      // Milestone 14 (Product Decision #2): the notification permission
+      // prompt fires here, after the first order confirmation - not on cold
+      // app open, not on first cart add. Fire-and-forget: a decline or a
+      // failure here must never affect the confirmation screen itself.
+      registerForPushNotifications().catch(() => {});
     }
   }, [data?.status, queryClient]);
 

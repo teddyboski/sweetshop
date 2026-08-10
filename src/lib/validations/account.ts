@@ -44,3 +44,13 @@ export const updateAddressSchema = z.object({
   isDefault: z.boolean().optional(),
 });
 export type UpdateAddressInput = z.infer<typeof updateAddressSchema>;
+
+// Milestone 14 (mobile): registered via Expo Notifications' own
+// getExpoPushTokenAsync() - not validated as a specific token format beyond
+// non-empty, since Expo's token shape is an implementation detail this
+// schema shouldn't need to know or re-validate.
+export const registerPushTokenSchema = z.object({
+  expoPushToken: z.string().trim().min(1),
+  platform: z.enum(["ios", "android"]),
+});
+export type RegisterPushTokenInput = z.infer<typeof registerPushTokenSchema>;
