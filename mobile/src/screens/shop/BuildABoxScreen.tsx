@@ -95,6 +95,15 @@ export function BuildABoxScreen() {
     );
   }
 
+  if (boxesQuery.isError || snacksQuery.isError) {
+    return (
+      <View style={styles.centerState}>
+        <Ionicons name="cloud-offline-outline" size={32} color={colors.mutedForeground} />
+        <Text style={styles.emptyText}>Couldn't load Build-a-Box. Pull to refresh or try again shortly.</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -124,23 +133,32 @@ export function BuildABoxScreen() {
             {status === "success" && <Text style={styles.successText}>Added to your cart.</Text>}
             {status === "error" && statusMessage && <Text style={styles.errorText}>{statusMessage}</Text>}
 
-            <FlatList
-              data={snacksQuery.data ?? []}
-              keyExtractor={(snack) => snack.id}
-              numColumns={2}
-              scrollEnabled={false}
-              columnWrapperStyle={styles.snackRow}
-              contentContainerStyle={styles.snackGrid}
-              renderItem={({ item: snack }) => (
-                <SnackPickerCard
-                  snack={snack}
-                  quantity={selections[snack.id] ?? 0}
-                  disabled={picked >= target}
-                  onAdd={() => addSnack(snack.id)}
-                  onRemove={() => removeSnack(snack.id)}
-                />
-              )}
-            />
+            {(snacksQuery.data ?? []).length === 0 ? (
+              <View style={styles.centerState}>
+                <Ionicons name="basket-outline" size={32} color={colors.mutedForeground} />
+                <Text style={styles.emptyText}>
+                  No snacks are eligible for Build-a-Box yet. Mark some as BYO-eligible in the admin dashboard.
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={snacksQuery.data ?? []}
+                keyExtractor={(snack) => snack.id}
+                numColumns={2}
+                scrollEnabled={false}
+                columnWrapperStyle={styles.snackRow}
+                contentContainerStyle={styles.snackGrid}
+                renderItem={({ item: snack }) => (
+                  <SnackPickerCard
+                    snack={snack}
+                    quantity={selections[snack.id] ?? 0}
+                    disabled={picked >= target}
+                    onAdd={() => addSnack(snack.id)}
+                    onRemove={() => removeSnack(snack.id)}
+                  />
+                )}
+              />
+            )}
           </>
         )}
       </ScrollView>
@@ -329,6 +347,14 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: spacing.sm,
     backgroundColor: colors.background,
+    paddingHorizontal: spacing["2xl"],
+    paddingVertical: spacing["3xl"],
+  },
+  emptyText: {
+    ...typography.sizes.sm,
+    color: colors.mutedForeground,
+    textAlign: "center",
   },
 });
