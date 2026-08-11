@@ -970,6 +970,7 @@ export type Database = {
           price_cents: number | null
           search_vector: unknown
           slug: string
+          status: string
           tags: string[]
           updated_at: string
         }
@@ -985,6 +986,7 @@ export type Database = {
           price_cents?: number | null
           search_vector?: unknown
           slug: string
+          status?: string
           tags?: string[]
           updated_at?: string
         }
@@ -1000,6 +1002,7 @@ export type Database = {
           price_cents?: number | null
           search_vector?: unknown
           slug?: string
+          status?: string
           tags?: string[]
           updated_at?: string
         }

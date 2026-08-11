@@ -7,7 +7,7 @@ import type { Database } from "@/types/supabase";
 type SnackUpdate = Database["public"]["Tables"]["snacks"]["Update"];
 
 const SNACK_COLUMNS =
-  "id, slug, name, brand, category, tags, price_cents, is_sellable_individually, is_byo_eligible, created_at, updated_at";
+  "id, slug, name, brand, category, tags, price_cents, is_sellable_individually, is_byo_eligible, status, created_at, updated_at";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin(request);
@@ -41,6 +41,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (input.priceCents !== undefined) updates.price_cents = input.priceCents;
   if (input.isSellableIndividually !== undefined) updates.is_sellable_individually = input.isSellableIndividually;
   if (input.isByoEligible !== undefined) updates.is_byo_eligible = input.isByoEligible;
+  if (input.status !== undefined) updates.status = input.status;
 
   const { data: after, error: updateError } = await admin
     .from("snacks")

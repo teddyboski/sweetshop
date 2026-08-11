@@ -8,7 +8,7 @@ export default async function AdminSnacksPage() {
   const admin = createAdminSupabaseClient();
   const { data: snacks } = await admin
     .from("snacks")
-    .select("id, slug, name, category, is_sellable_individually, is_byo_eligible")
+    .select("id, slug, name, category, is_sellable_individually, is_byo_eligible, status")
     .order("created_at", { ascending: false });
 
   return (
@@ -26,7 +26,14 @@ export default async function AdminSnacksPage() {
                 className="flex items-center justify-between p-4 text-sm hover:bg-muted"
               >
                 <div>
-                  <p className="font-medium">{snack.name}</p>
+                  <p className="font-medium">
+                    {snack.name}
+                    {snack.status === "archived" && (
+                      <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs font-normal text-muted-foreground">
+                        Archived
+                      </span>
+                    )}
+                  </p>
                   <p className="text-muted-foreground">
                     {snack.slug}
                     {snack.category ? ` - ${snack.category}` : ""}

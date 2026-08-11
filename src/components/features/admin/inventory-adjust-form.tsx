@@ -8,57 +8,69 @@ import { authenticatedFetch } from "@/lib/supabase/authenticated-fetch";
 
 export interface InventoryAdjustFormProps {
   snackId: string;
+  quantityOnHand: number;
 }
 
-export function InventoryAdjustForm({ snackId }: InventoryAdjustFormProps) {
+/**
+ * Ted's own words testing the admin dashboard, 2026-08-11: the inventory
+ * screen was "too complicated to understand." The underlying
+ * /api/admin/inventory/[snackId]/adjust route (and its adjust_inventory RPC)
+ * still only understands a relative delta - that's the right shape for the
+ * atomic, audited stock update - but making the *person* do that math
+ * themselves ("current is 47, I have 12 left, so type -35") was the actual
+ * friction. This form now asks for the number you can just read off a shelf
+ * ("set quantity to") and computes the delta itself before submitting -
+ * zero backend change needed, the simplification is entirely in what's
+ * asked of the person filling it in.
+ */
+export function InventoryAdjustForm({ snackId, quantityOnHand }: InventoryAdjustFormProps) {
   const router = useRouter();
-  const [delta, setDelta] = useState("");
-  const [reason, setReason] = useState<"restock" | "adjustment">("restock");
+  const [newQuantity, setNewQuantity] = useState(String(quantityOnHand));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setSaving(true);
 
+    const target = Number(newQuantity);
+    const delta = target - quantityOnHand;
+    if (!Number.isInteger(target) || target < 0) {
+      setError("Enter a whole number, 0 or more");
+      return;
+    }
+    if (delta === 0) return; // nothing changed - not an error, just a no-op
+
+    setSaving(true);
     const response = await authenticatedFetch(`/api/admin/inventory/${snackId}/adjust`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ delta: Number(delta), reason }),
+      body: JSON.stringify({ delta, reason: delta > 0 ? "restock" : "adjustment" }),
     });
     const body = await response.json();
     setSaving(false);
 
     if (!response.ok) {
-      setError(body.error ?? "Adjustment failed");
+      setError(body.error ?? "Update failed");
       return;
     }
 
-    setDelta("");
     router.refresh();
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex items-center gap-2">
-      <select
-        value={reason}
-        onChange={(e) => setReason(e.target.value as "restock" | "adjustment")}
-        className="rounded-md border p-1.5 text-sm"
-      >
-        <option value="restock">Restock</option>
-        <option value="adjustment">Adjustment</option>
-      </select>
+      <label className="text-xs text-muted-foreground">Set quantity to</label>
       <Input
         type="number"
-        value={delta}
-        onChange={(e) => setDelta(e.target.value)}
-        placeholder="+/- qty"
+        min={0}
+        value={newQuantity}
+        onChange={(e) => setNewQuantity(e.target.value)}
         className="w-24"
         required
       />
       <Button type="submit" variant="outline" size="sm" disabled={saving}>
-        {saving ? "..." : "Apply"}
+        {saving ? "Saving..." : "Save"}
       </Button>
       {error && <span className="text-xs text-destructive">{error}</span>}
     </form>

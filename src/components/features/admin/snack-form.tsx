@@ -24,6 +24,7 @@ export function SnackForm({ snack }: SnackFormProps) {
   const [priceCents, setPriceCents] = useState(snack?.price_cents ? String(snack.price_cents) : "");
   const [isSellableIndividually, setIsSellableIndividually] = useState(snack?.is_sellable_individually ?? false);
   const [isByoEligible, setIsByoEligible] = useState(snack?.is_byo_eligible ?? true);
+  const [status, setStatus] = useState(snack?.status ?? "active");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -41,6 +42,7 @@ export function SnackForm({ snack }: SnackFormProps) {
       priceCents: priceCents ? Number(priceCents) : null,
       isSellableIndividually,
       isByoEligible,
+      status,
     };
 
     const response = await authenticatedFetch(isEditing ? `/api/admin/snacks/${snack!.id}` : "/api/admin/snacks", {
@@ -88,6 +90,18 @@ export function SnackForm({ snack }: SnackFormProps) {
       <div className="flex flex-col gap-1.5">
         <label htmlFor="name" className="text-sm font-medium">Name</label>
         <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="status" className="text-sm font-medium">Status</label>
+        <select
+          id="status"
+          value={status}
+          onChange={(e) => setStatus(e.target.value as "active" | "archived")}
+          className="rounded-md border p-2 text-sm"
+        >
+          <option value="active">Active - visible to customers</option>
+          <option value="archived">Archived - hidden, don&apos;t carry anymore</option>
+        </select>
       </div>
       <div className="flex flex-col gap-1.5">
         <label htmlFor="brand" className="text-sm font-medium">Brand</label>

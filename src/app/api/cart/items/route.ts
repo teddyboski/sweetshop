@@ -127,11 +127,15 @@ async function prepareBuildABoxItem(
   const snackIds = data.snacks.map((s) => s.snackId);
   const { data: snacks, error: snacksError } = await admin
     .from("snacks")
-    .select("id, is_byo_eligible")
+    .select("id, is_byo_eligible, status")
     .in("id", snackIds);
 
   if (snacksError) return { error: snacksError.message, status: 500 };
-  if (!snacks || snacks.length !== snackIds.length || snacks.some((s) => !s.is_byo_eligible)) {
+  if (
+    !snacks ||
+    snacks.length !== snackIds.length ||
+    snacks.some((s) => !s.is_byo_eligible || s.status !== "active")
+  ) {
     return { error: "One or more snacks are not eligible for Build-a-Box", status: 400 };
   }
 
@@ -160,12 +164,14 @@ async function prepareSnackItem(
 ): Promise<PreparedItem> {
   const { data: snack, error } = await admin
     .from("snacks")
-    .select("id, is_sellable_individually")
+    .select("id, is_sellable_individually, status")
     .eq("id", data.snackId)
     .maybeSingle();
 
   if (error) return { error: error.message, status: 500 };
-  if (!snack || !snack.is_sellable_individually) return { error: "Snack not found", status: 404 };
+  if (!snack || !snack.is_sellable_individually || snack.status !== "active") {
+    return { error: "Snack not found", status: 404 };
+  }
 
   return { snackId: snack.id, quantity: data.quantity };
 }
