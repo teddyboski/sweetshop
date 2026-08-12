@@ -109,7 +109,27 @@ export function SnackForm({ snack }: SnackFormProps) {
       </div>
       <div className="flex flex-col gap-1.5">
         <label htmlFor="category" className="text-sm font-medium">Category</label>
-        <Input id="category" value={category ?? ""} onChange={(e) => setCategory(e.target.value)} />
+        <Input
+          id="category"
+          list="snack-categories"
+          value={category ?? ""}
+          onChange={(e) => setCategory(e.target.value)}
+          placeholder="e.g. house_snacks, candy, chips"
+        />
+        {/* Suggestions only - free text still accepted, so this never blocks
+            a genuinely new category. house_snacks added 2026-08-12 for
+            Ted's in-house made items (trail mix, dipped cookies, loaded
+            rice krispie treats), kept separate from store-bought snacks. */}
+        <datalist id="snack-categories">
+          <option value="house_snacks" />
+          <option value="candy" />
+          <option value="chips" />
+          <option value="cookies" />
+          <option value="spicy" />
+          <option value="salty" />
+          <option value="sweet" />
+          <option value="international" />
+        </datalist>
       </div>
       <div className="flex flex-col gap-1.5">
         <label htmlFor="priceCents" className="text-sm font-medium">Price (cents)</label>

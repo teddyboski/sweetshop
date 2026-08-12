@@ -56,6 +56,17 @@ export const createSnackSchema = z.object({
 });
 export type CreateSnackInput = z.infer<typeof createSnackSchema>;
 
+export const addBoxItemSchema = z.object({
+  snackId: z.string().uuid(),
+  quantity: z.number().int().positive().default(1),
+});
+export type AddBoxItemInput = z.infer<typeof addBoxItemSchema>;
+
+export const updateBoxItemSchema = z.object({
+  quantity: z.number().int().positive(),
+});
+export type UpdateBoxItemInput = z.infer<typeof updateBoxItemSchema>;
+
 export const updateSnackSchema = z.object({
   name: z.string().trim().min(1).optional(),
   brand: z.string().trim().min(1).nullable().optional(),
