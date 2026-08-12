@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createStripeClient } from "@/lib/stripe/client";
 import { sendOrderConfirmationEmail } from "@/lib/email/send-order-confirmation";
+import { getCartContents } from "@/lib/supabase/queries/cart";
 
 const POINTS_PER_DOLLAR = 1; // Milestone 6 plan, Product Decision #9
 const REFERRAL_REWARD_POINTS = 500; // Milestone 9 plan, Product Decision #1
@@ -57,6 +58,13 @@ export async function POST(request: NextRequest) {
       await handleInvoicePaid(admin, event.data.object as Stripe.Invoice);
     } catch (error) {
       console.error(`invoice.paid processing failed for event ${event.id}:`, error);
+      return NextResponse.json({ error: "Processing failed" }, { status: 500 });
+    }
+  } else if (event.type === "payment_intent.succeeded") {
+    try {
+      await handlePaymentIntentSucceeded(admin, event.data.object as Stripe.PaymentIntent);
+    } catch (error) {
+      console.error(`payment_intent.succeeded processing failed for event ${event.id}:`, error);
       return NextResponse.json({ error: "Processing failed" }, { status: 500 });
     }
   }
@@ -620,4 +628,268 @@ async function handleSubscriptionSync(admin: ReturnType<typeof createAdminSupaba
       console.error(`Failed to log subscription_paused activity for subscription ${subscription.id}:`, activityError);
     }
   }
+}
+
+/**
+ * Milestone 13 (mobile): completion path for the native Payment Sheet
+ * checkout (/api/checkout/payment-intent), a deliberately SEPARATE, mostly
+ * duplicated function rather than a shared refactor of
+ * handleCheckoutSessionCompleted/createOrderFromSession above - see this
+ * repo's mobile Milestone 13 plan and /api/checkout/payment-intent/route.ts's
+ * header comment for the full reasoning. Short version: this is a live,
+ * revenue-critical payment path with no Stripe test-mode keys available to
+ * verify against before shipping, so the existing, already-working web
+ * checkout code is left completely untouched. Some duplication is the
+ * accepted cost (CLAUDE.md: "repeat yourself twice before extracting a
+ * helper").
+ *
+ * Critical correctness guard: every Checkout-Session-created PaymentIntent
+ * ALSO independently fires its own payment_intent.succeeded event - Stripe
+ * does not suppress it just because a checkout.session.completed event
+ * already covered that same payment. Without the metadata.source === "mobile"
+ * check below, EVERY existing web order would be double-processed by this
+ * handler the moment it shipped. metadata.source is set to "mobile" only by
+ * /api/checkout/payment-intent/route.ts, so this is a safe, exclusive
+ * discriminator - web's Checkout Session route never sets that key.
+ *
+ * Idempotency anchor: orders.stripe_payment_intent_id, confirmed unique in
+ * the schema (supabase/migrations/20260710220202_initial_schema.sql), same
+ * pattern as handleCheckoutSessionCompleted's stripe_checkout_session_id
+ * anchor and for the same reason (a retry after a partial failure - e.g.
+ * order created but order_items didn't finish - must still complete the
+ * work, not skip it because the event id was already logged).
+ *
+ * Cart line lookup: unlike the session flow (which reads Stripe's own
+ * line items, since a Checkout Session's cart_item_id is embedded in each
+ * line's product metadata), a raw PaymentIntent has no line items at all -
+ * so this reads the cart's current contents directly via getCartContents,
+ * using cart_id from the PaymentIntent's own metadata. This only works
+ * because nothing marks the cart 'converted' until this function runs
+ * (mirroring the session flow's own ordering), so the cart's rows are still
+ * intact by the time this webhook fires.
+ */
+async function handlePaymentIntentSucceeded(
+  admin: ReturnType<typeof createAdminSupabaseClient>,
+  paymentIntent: Stripe.PaymentIntent
+) {
+  if (paymentIntent.metadata?.source !== "mobile") {
+    // Not ours - almost certainly the underlying PaymentIntent of a web
+    // Checkout Session, already handled by handleCheckoutSessionCompleted
+    // via the checkout.session.completed event. No-op, not an error.
+    return;
+  }
+
+  const cartId = paymentIntent.metadata?.cart_id;
+  if (!cartId) {
+    console.error(`payment_intent.succeeded for ${paymentIntent.id} has metadata.source=mobile but no cart_id`);
+    return;
+  }
+
+  const { data: existingOrder } = await admin
+    .from("orders")
+    .select("id, confirmation_email_sent_at")
+    .eq("stripe_payment_intent_id", paymentIntent.id)
+    .maybeSingle();
+
+  const orderId = existingOrder ? existingOrder.id : await createOrderFromPaymentIntent(admin, paymentIntent, cartId);
+
+  if (existingOrder?.confirmation_email_sent_at) return;
+
+  await sendOrderConfirmationEmail(admin, orderId);
+  await admin.from("orders").update({ confirmation_email_sent_at: new Date().toISOString() }).eq("id", orderId);
+}
+
+async function createOrderFromPaymentIntent(
+  admin: ReturnType<typeof createAdminSupabaseClient>,
+  paymentIntent: Stripe.PaymentIntent,
+  cartId: string
+): Promise<string> {
+  const userId = paymentIntent.metadata?.user_id ?? null;
+  const guestEmail = paymentIntent.metadata?.guest_email ?? null;
+
+  // Same destructure-into-a-plain-literal reasoning as createOrderFromSession
+  // above: Supabase's generated Json type needs an index signature Stripe's
+  // named Address interface doesn't declare.
+  const shipping = paymentIntent.shipping;
+  const shippingAddress = shipping
+    ? {
+        // shipping.name is `string | undefined` on Stripe's PaymentIntent
+        // type (unlike Checkout Session's shipping_details.name, which is
+        // required) - coerced to `| null` since undefined isn't assignable
+        // into Supabase's Json column type.
+        name: shipping.name ?? null,
+        address: {
+          line1: shipping.address?.line1 ?? null,
+          line2: shipping.address?.line2 ?? null,
+          city: shipping.address?.city ?? null,
+          state: shipping.address?.state ?? null,
+          postal_code: shipping.address?.postal_code ?? null,
+          country: shipping.address?.country ?? null,
+        },
+      }
+    : null;
+
+  const { data: order, error: orderError } = await admin
+    .from("orders")
+    .insert({
+      user_id: userId,
+      guest_email: guestEmail,
+      stripe_payment_intent_id: paymentIntent.id,
+      stripe_checkout_session_id: null,
+      status: "paid",
+      total_amount_cents: paymentIntent.amount,
+      shipping_address: shippingAddress,
+    })
+    .select("id")
+    .single();
+
+  if (orderError || !order) {
+    console.error(`Failed to create order for payment_intent ${paymentIntent.id}:`, orderError);
+    throw orderError ?? new Error("Order insert returned no row");
+  }
+
+  // No subscription handling here on purpose - /api/checkout/payment-intent
+  // rejects any cart containing a subscription line before a PaymentIntent
+  // is ever created (mobile Milestone 13 scope decision), so every line in
+  // this cart is guaranteed one-time.
+  const cart = await getCartContents(cartId);
+
+  for (const line of cart.lines) {
+    const { data: orderItem, error: orderItemError } = await admin
+      .from("order_items")
+      .insert({
+        order_id: order.id,
+        item_type: line.itemType,
+        box_id: line.boxId,
+        snack_id: line.snackId,
+        quantity: line.quantity,
+        unit_price_cents: line.unitPriceCents,
+      })
+      .select("id")
+      .single();
+
+    if (orderItemError || !orderItem) {
+      console.error(`Failed to create order_item for cart line ${line.id}:`, orderItemError);
+      continue;
+    }
+
+    if (line.snackSelections && line.snackSelections.length > 0) {
+      await admin.from("order_item_snacks").insert(
+        line.snackSelections.map((s) => ({
+          order_item_id: orderItem.id,
+          snack_id: s.snackId,
+          quantity: s.quantity,
+        }))
+      );
+    }
+  }
+
+  await admin.from("carts").update({ status: "converted" }).eq("id", cartId);
+
+  // Rewards, promo usage, points redemption, and referral crediting below
+  // are a deliberate line-for-line mirror of createOrderFromSession's tail
+  // logic - same business rules, same order of operations, just reading
+  // from paymentIntent.metadata instead of session.metadata. See that
+  // function's inline comments for the full reasoning on each step; not
+  // re-explained here to avoid drift between two comment copies describing
+  // the same rules.
+  if (userId) {
+    const points = Math.floor(paymentIntent.amount / 100) * POINTS_PER_DOLLAR;
+    if (points > 0) {
+      await admin.rpc("credit_rewards_points", {
+        p_user_id: userId,
+        p_delta_points: points,
+        p_reason: "order_placed",
+        p_order_id: order.id,
+      });
+    }
+
+    const { error: activityError } = await admin
+      .from("customer_activity")
+      .insert({ user_id: userId, event_type: "order_placed", metadata: { order_id: order.id } });
+    if (activityError) {
+      console.error(`Failed to log order_placed activity for order ${order.id}:`, activityError);
+    }
+  }
+
+  const promotionId = paymentIntent.metadata?.promotion_id ?? null;
+  if (promotionId) {
+    const { data: incremented, error: promoError } = await admin.rpc("increment_promotion_used_count", {
+      p_promotion_id: promotionId,
+    });
+    if (promoError || incremented === false) {
+      console.error(`Promotion ${promotionId} usage could not be recorded for order ${order.id} (paid=true):`, promoError);
+    }
+  }
+
+  const redeemedPointsRaw = paymentIntent.metadata?.redeemed_points;
+  if (userId && redeemedPointsRaw) {
+    const redeemedPoints = Number(redeemedPointsRaw);
+    const { data: redeemed, error: redeemError } = await admin.rpc("redeem_rewards_points", {
+      p_user_id: userId,
+      p_points: redeemedPoints,
+      p_order_id: order.id,
+    });
+    if (redeemError || redeemed === false) {
+      console.error(`Points redemption could not be recorded for order ${order.id} (paid=true):`, redeemError);
+    } else {
+      await admin.from("customer_activity").insert({
+        user_id: userId,
+        event_type: "reward_redeemed",
+        metadata: { order_id: order.id, points: redeemedPoints },
+      });
+    }
+  }
+
+  if (userId) {
+    const { data: referredProfile } = await admin
+      .from("profiles")
+      .select("referred_by, stripe_customer_id")
+      .eq("id", userId)
+      .single();
+
+    if (referredProfile?.referred_by) {
+      const { data: pendingReferral } = await admin
+        .from("referrals")
+        .select("id")
+        .eq("referred_id", userId)
+        .eq("referrer_id", referredProfile.referred_by)
+        .eq("status", "pending")
+        .maybeSingle();
+
+      if (pendingReferral) {
+        const { data: referrerProfile } = await admin
+          .from("profiles")
+          .select("stripe_customer_id")
+          .eq("id", referredProfile.referred_by)
+          .single();
+
+        const sharesPaymentMethod =
+          referrerProfile?.stripe_customer_id &&
+          referredProfile.stripe_customer_id &&
+          referrerProfile.stripe_customer_id === referredProfile.stripe_customer_id;
+
+        if (!sharesPaymentMethod) {
+          await admin.rpc("credit_rewards_points", {
+            p_user_id: referredProfile.referred_by,
+            p_delta_points: REFERRAL_REWARD_POINTS,
+            p_reason: "referral_referrer_credit",
+            p_order_id: null,
+          });
+          await admin.rpc("credit_rewards_points", {
+            p_user_id: userId,
+            p_delta_points: REFERRAL_REWARD_POINTS,
+            p_reason: "referral_referred_credit",
+            p_order_id: order.id,
+          });
+          await admin
+            .from("referrals")
+            .update({ status: "credited", reward_issued_at: new Date().toISOString() })
+            .eq("id", pendingReferral.id);
+        }
+      }
+    }
+  }
+
+  return order.id;
 }

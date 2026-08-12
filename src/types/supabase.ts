@@ -415,6 +415,7 @@ export type Database = {
           created_at: string
           ends_at: string
           id: string
+          notified_at: string | null
           quantity_limit: number
           starts_at: string
           units_sold: number
@@ -425,6 +426,7 @@ export type Database = {
           created_at?: string
           ends_at: string
           id?: string
+          notified_at?: string | null
           quantity_limit: number
           starts_at: string
           units_sold?: number
@@ -435,6 +437,7 @@ export type Database = {
           created_at?: string
           ends_at?: string
           id?: string
+          notified_at?: string | null
           quantity_limit?: number
           starts_at?: string
           units_sold?: number
@@ -967,6 +970,7 @@ export type Database = {
           price_cents: number | null
           search_vector: unknown
           slug: string
+          status: string
           tags: string[]
           updated_at: string
         }
@@ -982,6 +986,7 @@ export type Database = {
           price_cents?: number | null
           search_vector?: unknown
           slug: string
+          status?: string
           tags?: string[]
           updated_at?: string
         }
@@ -997,10 +1002,40 @@ export type Database = {
           price_cents?: number | null
           search_vector?: unknown
           slug?: string
+          status?: string
           tags?: string[]
           updated_at?: string
         }
         Relationships: []
+      }
+      push_tokens: {
+        Row: {
+          created_at: string
+          expo_push_token: string
+          platform: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expo_push_token: string
+          platform: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expo_push_token?: string
+          platform?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       stripe_events: {
         Row: {

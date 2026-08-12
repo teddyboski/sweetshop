@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/supabase/require-admin";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { sendExpoPushNotifications } from "@/lib/push/send";
 import type { Database } from "@/types/supabase";
 
 type OrderUpdate = Database["public"]["Tables"]["orders"]["Update"];
@@ -69,6 +70,26 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     before,
     after,
   });
+
+  // Milestone 14 (mobile), Task 8: push trigger, added alongside the
+  // audit_logs write above rather than as a new admin feature (per the
+  // plan doc). Guarded on before.status !== "shipped" so a redundant PATCH
+  // (e.g. re-submitting the same status) never re-sends. Guest orders have
+  // no user_id and therefore no possible push_tokens row - the lookup
+  // naturally returns nothing, no special-casing needed.
+  if (after.status === "shipped" && before.status !== "shipped" && after.user_id) {
+    const { data: tokens } = await admin.from("push_tokens").select("expo_push_token").eq("user_id", after.user_id);
+    if (tokens && tokens.length > 0) {
+      await sendExpoPushNotifications(
+        tokens.map((t) => ({
+          to: t.expo_push_token,
+          title: "Your order has shipped!",
+          body: `Order #${after.id.slice(0, 8)} is on its way.`,
+          data: { type: "order_shipped", orderId: after.id },
+        }))
+      );
+    }
+  }
 
   return NextResponse.json({ data: after, error: null }, { status: 200 });
 }

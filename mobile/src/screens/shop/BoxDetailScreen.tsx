@@ -1,27 +1,36 @@
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useQuery } from "@tanstack/react-query";
-import { useRoute, type RouteProp } from "@react-navigation/native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { fetchBoxBySlug } from "../../lib/api/catalog";
+import { addBoxToCart } from "../../lib/api/cart";
 import { ProductImage } from "../../components/shared/ProductImage";
 import { formatPriceCents } from "../../lib/utils/format";
-import { colors, spacing, typography } from "../../theme";
+import { colors, radii, spacing, typography } from "../../theme";
 import type { ShopStackParamList } from "../../navigation/ShopStack";
 
 type Route = RouteProp<ShopStackParamList, "BoxDetail">;
+type Nav = NativeStackNavigationProp<ShopStackParamList, "BoxDetail">;
 
 /**
- * Mirrors (shop)/shop/box/[slug]/page.tsx's content exactly. No Add to
- * Cart / Build this box action yet - Milestone 12 is catalog browsing
- * only, cart mutations are Milestone 13's job (see the mobile roadmap's
- * dependency chain). This screen answers "what is this box", not
- * "how do I buy it" yet.
+ * Mirrors (shop)/shop/box/[slug]/page.tsx's content, now with a working
+ * Add to Cart (Milestone 13) instead of the Milestone 12 info-only
+ * placeholder. Build-a-Box boxes route to the picker screen instead of
+ * adding directly, same split the web page makes.
  */
 export function BoxDetailScreen() {
   const { params } = useRoute<Route>();
+  const navigation = useNavigation<Nav>();
+  const queryClient = useQueryClient();
   const { data: box, isPending, isError } = useQuery({
     queryKey: ["catalog", "box", params.slug],
     queryFn: () => fetchBoxBySlug(params.slug),
+  });
+
+  const addMutation = useMutation({
+    mutationFn: (slug: string) => addBoxToCart(slug),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart"] }),
   });
 
   if (isPending) {
@@ -58,21 +67,36 @@ export function BoxDetailScreen() {
       {box.box_type === "build_a_box" ? (
         <View style={styles.noteBox}>
           <Text style={styles.noteText}>Pick exactly {box.slot_count} snacks to build this box.</Text>
+          <Pressable style={styles.addButton} onPress={() => navigation.navigate("BuildABox")}>
+            <Text style={styles.addButtonText}>Build this box</Text>
+          </Pressable>
         </View>
       ) : (
-        box.items.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionHeading}>What's typically inside</Text>
-            {box.items.map((item, i) => (
-              <Text key={i} style={styles.itemLine}>
-                • {item.snacks?.name}
-              </Text>
-            ))}
-            <Text style={styles.disclaimer}>
-              Contents rotate weekly and may vary — this is a representative example, not a guaranteed list.
+        <Pressable
+          style={styles.addButton}
+          disabled={addMutation.isPending}
+          onPress={() => addMutation.mutate(box.slug)}
+        >
+          <Text style={styles.addButtonText}>
+            {addMutation.isPending ? "Adding..." : addMutation.isSuccess ? "Added ✓" : "Add to Cart"}
+          </Text>
+        </Pressable>
+      )}
+
+      {addMutation.isError && <Text style={styles.errorText}>{addMutation.error.message}</Text>}
+
+      {box.box_type !== "build_a_box" && box.items.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionHeading}>What's typically inside</Text>
+          {box.items.map((item, i) => (
+            <Text key={i} style={styles.itemLine}>
+              • {item.snacks?.name}
             </Text>
-          </View>
-        )
+          ))}
+          <Text style={styles.disclaimer}>
+            Contents rotate weekly and may vary — this is a representative example, not a guaranteed list.
+          </Text>
+        </View>
       )}
     </ScrollView>
   );
@@ -119,6 +143,24 @@ const styles = StyleSheet.create({
   noteText: {
     ...typography.sizes.sm,
     color: colors.secondaryForeground,
+    marginBottom: spacing.md,
+  },
+  addButton: {
+    marginTop: spacing.lg,
+    backgroundColor: colors.primary,
+    borderRadius: radii.full,
+    paddingVertical: spacing.md,
+    alignItems: "center",
+  },
+  addButtonText: {
+    ...typography.sizes.base,
+    fontFamily: typography.fontFamilyMedium,
+    color: colors.primaryForeground,
+  },
+  errorText: {
+    ...typography.sizes.sm,
+    color: colors.destructive,
+    marginTop: spacing.sm,
   },
   section: {
     marginTop: spacing.xl,

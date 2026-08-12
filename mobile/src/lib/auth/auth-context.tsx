@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../supabase/client";
+import { deregisterPushNotifications } from "../push/register";
 
 type AuthContextValue = {
   session: Session | null;
@@ -41,6 +42,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
+    // Deregisters this device's push token first (Milestone 14, Product
+    // Decision #5) - needs the still-valid bearer token, so it must run
+    // before supabase.auth.signOut() clears the session out from under it.
+    await deregisterPushNotifications();
     await supabase.auth.signOut();
   }
 

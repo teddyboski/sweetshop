@@ -26,6 +26,12 @@ export default function Privacy() {
           tracking.
         </p>
         <p>
+          If you use our mobile app and opt in to notifications, we collect a
+          device push token so we can alert you when your order ships or a
+          limited-time drop goes live. You can turn this off anytime in your
+          device&apos;s notification settings.
+        </p>
+        <p>
           You can request access to or deletion of your data anytime by
           emailing Manager@middlemanmerchants.com.
         </p>

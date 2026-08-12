@@ -1,6 +1,7 @@
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { formatDate } from "@/lib/utils";
 import { InventoryAdjustForm } from "@/components/features/admin/inventory-adjust-form";
+import { SnackStatusToggle } from "@/components/features/admin/snack-status-toggle";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export default async function AdminInventoryPage() {
   const admin = createAdminSupabaseClient();
   const { data: inventory } = await admin
     .from("inventory")
-    .select("snack_id, quantity_on_hand, snacks(name)")
+    .select("snack_id, quantity_on_hand, snacks(name, status)")
     .order("quantity_on_hand", { ascending: true });
 
   const { data: events } = await admin
@@ -30,12 +31,20 @@ export default async function AdminInventoryPage() {
             className="flex items-center justify-between gap-4 p-4 text-sm"
           >
             <div className="flex-1">
-              <p className="font-medium">{row.snacks?.name}</p>
+              <p className="font-medium">
+                {row.snacks?.name}
+                {row.snacks?.status === "archived" && (
+                  <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs font-normal text-muted-foreground">
+                    Archived
+                  </span>
+                )}
+              </p>
               <p className={row.quantity_on_hand < 10 ? "text-destructive" : "text-muted-foreground"}>
                 {row.quantity_on_hand} on hand
               </p>
             </div>
-            <InventoryAdjustForm snackId={row.snack_id} />
+            <InventoryAdjustForm snackId={row.snack_id} quantityOnHand={row.quantity_on_hand} />
+            <SnackStatusToggle snackId={row.snack_id} status={row.snacks?.status ?? "active"} />
           </div>
         ))}
       </div>

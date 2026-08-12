@@ -34,6 +34,7 @@ export async function getSellableSnacks(filters: { category?: string; tag?: stri
       "id, slug, name, brand, category, tags, price_cents, is_sellable_individually, product_images(image_url, is_primary)"
     )
     .eq("is_sellable_individually", true)
+    .eq("status", "active")
     .order("name");
 
   if (filters.category) query = query.eq("category", filters.category);
@@ -53,6 +54,7 @@ export async function getByoEligibleSnacks() {
     .from("snacks")
     .select("id, slug, name, brand, category, tags, price_cents")
     .eq("is_byo_eligible", true)
+    .eq("status", "active")
     .order("name");
   if (error) throw error;
   return data;
@@ -82,6 +84,7 @@ export async function getSnackBySlug(slug: string) {
       "id, slug, name, brand, category, tags, price_cents, is_sellable_individually, product_images(image_url, is_primary)"
     )
     .eq("slug", slug)
+    .eq("status", "active")
     .maybeSingle();
   if (error) throw error;
   if (!data) return data;
@@ -149,6 +152,7 @@ export async function searchCatalog(query: string) {
       .from("snacks")
       .select("id, slug, name, price_cents, product_images(image_url, is_primary)")
       .eq("is_sellable_individually", true)
+      .eq("status", "active")
       .textSearch("search_vector", query),
   ]);
   if (boxes.error) throw boxes.error;

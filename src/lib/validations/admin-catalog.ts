@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const BOX_TYPES = ["curated", "build_a_box", "mystery"] as const;
 const BOX_STATUSES = ["draft", "active", "archived"] as const;
+const SNACK_STATUSES = ["active", "archived"] as const;
 
 // slot_count is required only when box_type = build_a_box - enforced here,
 // not as a DB check constraint, per that column's own migration comment
@@ -51,6 +52,7 @@ export const createSnackSchema = z.object({
   priceCents: z.number().int().positive().nullable().optional(),
   isSellableIndividually: z.boolean().default(false),
   isByoEligible: z.boolean().default(true),
+  status: z.enum(SNACK_STATUSES).default("active"),
 });
 export type CreateSnackInput = z.infer<typeof createSnackSchema>;
 
@@ -62,5 +64,6 @@ export const updateSnackSchema = z.object({
   priceCents: z.number().int().positive().nullable().optional(),
   isSellableIndividually: z.boolean().optional(),
   isByoEligible: z.boolean().optional(),
+  status: z.enum(SNACK_STATUSES).optional(),
 });
 export type UpdateSnackInput = z.infer<typeof updateSnackSchema>;

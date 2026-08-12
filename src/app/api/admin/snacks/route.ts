@@ -7,7 +7,7 @@ import { createSnackSchema } from "@/lib/validations/admin-catalog";
 // is typed unknown by the generated types, not Json-representable, and
 // would fail audit_logs.before/after otherwise (same issue as boxes).
 const SNACK_COLUMNS =
-  "id, slug, name, brand, category, tags, price_cents, is_sellable_individually, is_byo_eligible, created_at, updated_at";
+  "id, slug, name, brand, category, tags, price_cents, is_sellable_individually, is_byo_eligible, status, created_at, updated_at";
 
 export async function POST(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
       price_cents: input.priceCents ?? null,
       is_sellable_individually: input.isSellableIndividually,
       is_byo_eligible: input.isByoEligible,
+      status: input.status,
     })
     .select(SNACK_COLUMNS)
     .single();

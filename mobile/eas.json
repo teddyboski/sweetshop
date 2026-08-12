@@ -1,14 +1,41 @@
 {
-  "cli": {
-    "appVersionSource": "local"
-  },
-  "build": {
-    "preview": {
-      "distribution": "internal",
-      "android": {
-        "buildType": "apk"
-      },
-      "channel": "preview"
-    }
-  }
+    "cli":  {
+                "appVersionSource":  "local"
+            },
+    "build":  {
+                  "development":  {
+                                      "developmentClient":  true,
+                                      "distribution":  "internal",
+                                      "channel":  "development"
+                                  },
+                  "preview":  {
+                                  "distribution":  "internal",
+                                  "android":  {
+                                                  "buildType":  "apk"
+                                              },
+                                  "channel":  "preview",
+                                  "env":  {
+                                              "EXPO_PUBLIC_SUPABASE_URL":  "https://dszbfvhpfnmpbhqgmzst.supabase.co",
+                                              "EXPO_PUBLIC_SUPABASE_ANON_KEY":  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzemJmdmhwZm5tcGJocWdtenN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3MjExMzIsImV4cCI6MjA5OTI5NzEzMn0.V8EA1KU3Q0euKZiW6zsbvhzn19ITihAKLTA0vuQUbyI",
+                                              "EXPO_PUBLIC_API_BASE_URL":  "https://www.sweetshopcentral.com",
+                                              "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY":  "pk_live_51TbN013tHjPWpYxOAsnjMoxSY7FOgB3KA3wiJoh1cM4Ux7LpWcpQQGa4wrMCA9bdK4NykF91dwbxe8CORyzUVYk000Xzv9ZSQE"
+                                          }
+                              },
+                  "production":  {
+                                     "autoIncrement":  true,
+                                     "distribution":  "store",
+                                     "channel":  "production",
+                                     "ios":  {
+                                                 "distribution":  "store"
+                                             },
+                                     "android":  {
+                                                     "buildType":  "app-bundle"
+                                                 }
+                                 }
+              },
+    "submit":  {
+                   "production":  {
+
+                                  }
+               }
 }
