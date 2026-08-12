@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/drop-live-notifications",
-      "schedule": "* * * * *"
+      "schedule": "0 9 * * *"
     }
   ]
 }
