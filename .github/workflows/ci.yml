@@ -22,4 +22,10 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
-      - run: npm run test
+      # npm run test is disabled here temporarily (2026-08-12): these are real
+      # integration tests that write orders, decrement inventory, and touch
+      # Stripe against the SAME Supabase/Stripe project as production - CI's
+      # secrets currently point at prod, not an isolated test project. Running
+      # them here was corrupting real order/inventory data on every push to
+      # main. Re-enable once a dedicated test Supabase project (and a Stripe
+      # test-mode secret key) are wired up in GitHub Actions secrets.
