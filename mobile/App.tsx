@@ -5,6 +5,8 @@ import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StripeProvider } from "@stripe/stripe-react-native";
 import { AuthProvider, useAuth } from "./src/lib/auth/auth-context";
+import { ToastProvider } from "./src/lib/toast/toast-context";
+import { Toast } from "./src/components/shared/Toast";
 import { RootTabs } from "./src/navigation/RootTabs";
 import { colors } from "./src/theme";
 
@@ -64,6 +66,7 @@ function AppShell() {
   return (
     <NavigationContainer theme={navigationTheme}>
       <RootTabs />
+      <Toast />
     </NavigationContainer>
   );
 }
@@ -74,7 +77,9 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <SafeAreaProvider>
           <AuthProvider>
-            <AppShell />
+            <ToastProvider>
+              <AppShell />
+            </ToastProvider>
           </AuthProvider>
           <StatusBar style="auto" />
         </SafeAreaProvider>

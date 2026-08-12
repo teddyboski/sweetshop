@@ -7,6 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { fetchBoxes, fetchByoSnacks, type CatalogBox, type ByoSnack } from "../../lib/api/catalog";
 import { addBuildABoxToCart } from "../../lib/api/cart";
 import { formatPriceCents } from "../../lib/utils/format";
+import { useToast } from "../../lib/toast/toast-context";
 import { colors, radii, spacing, typography } from "../../theme";
 import type { ShopStackParamList } from "../../navigation/ShopStack";
 
@@ -23,6 +24,7 @@ type Nav = NativeStackNavigationProp<ShopStackParamList, "BuildABox">;
 export function BuildABoxScreen() {
   const navigation = useNavigation<Nav>();
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
 
   const boxesQuery = useQuery({ queryKey: ["catalog", "boxes"], queryFn: fetchBoxes });
   const snacksQuery = useQuery({ queryKey: ["catalog", "byo-snacks"], queryFn: fetchByoSnacks });
@@ -80,10 +82,12 @@ export function BuildABoxScreen() {
       setStatus("success");
       setSelections({});
       queryClient.invalidateQueries({ queryKey: ["cart"] });
+      showToast(`${selectedBox?.title ?? "Build-a-Box"} added to cart`);
     },
     onError: (error: Error) => {
       setStatus("error");
       setStatusMessage(error.message || "Something went wrong. Please try again.");
+      showToast(error.message || "Couldn't add to cart", "error");
     },
   });
 
@@ -117,7 +121,11 @@ export function BuildABoxScreen() {
               <Pressable
                 key={box.id}
                 onPress={() => selectBox(box)}
-                style={[styles.sizeCard, active && styles.sizeCardActive]}
+                style={({ pressed }) => [
+                  styles.sizeCard,
+                  active && styles.sizeCardActive,
+                  pressed && styles.sizeCardPressed,
+                ]}
               >
                 <Text style={styles.sizeTitle}>{box.title}</Text>
                 <Text style={styles.sizeSubtitle}>
@@ -169,7 +177,11 @@ export function BuildABoxScreen() {
             {picked} / {target} picked
           </Text>
           <Pressable
-            style={[styles.submitButton, !canSubmit && styles.submitButtonDisabled]}
+            style={({ pressed }) => [
+              styles.submitButton,
+              !canSubmit && styles.submitButtonDisabled,
+              pressed && canSubmit && styles.submitButtonPressed,
+            ]}
             disabled={!canSubmit}
             onPress={() => submitMutation.mutate()}
           >
@@ -246,6 +258,9 @@ const styles = StyleSheet.create({
   sizeCardActive: {
     borderColor: colors.primary,
     borderWidth: 2,
+  },
+  sizeCardPressed: {
+    opacity: 0.8,
   },
   sizeTitle: {
     ...typography.sizes.base,
@@ -337,6 +352,10 @@ const styles = StyleSheet.create({
   },
   submitButtonDisabled: {
     backgroundColor: colors.muted,
+  },
+  submitButtonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
   },
   submitButtonText: {
     ...typography.sizes.sm,
