@@ -2,12 +2,28 @@ import { Pressable, ScrollView, StyleSheet, Text } from "react-native";
 import { colors, radii, spacing, typography } from "../../theme";
 
 /** Mirrors the CATEGORIES constant in (shop)/shop/page.tsx exactly. */
-export const CATEGORIES = ["candy", "chips", "cookies", "spicy", "salty", "sweet", "international"] as const;
+export const CATEGORIES = [
+  "house_snacks",
+  "candy",
+  "chips",
+  "cookies",
+  "spicy",
+  "salty",
+  "sweet",
+  "international",
+] as const;
 
 interface CategoryChipsProps {
   selected: string | undefined;
   onSelect: (category: string | undefined) => void;
 }
+
+// CSS text-transform: capitalize only capitalizes per word (space-separated),
+// so "house_snacks" would render as "House_snacks" with the underscore
+// showing - display labels are spelled out here instead.
+const CATEGORY_LABELS: Record<string, string> = {
+  house_snacks: "House Snacks",
+};
 
 export function CategoryChips({ selected, onSelect }: CategoryChipsProps) {
   return (
@@ -20,7 +36,9 @@ export function CategoryChips({ selected, onSelect }: CategoryChipsProps) {
             onPress={() => onSelect(active ? undefined : category)}
             style={[styles.chip, active && styles.chipActive]}
           >
-            <Text style={[styles.label, active && styles.labelActive]}>{category}</Text>
+            <Text style={[styles.label, active && styles.labelActive]}>
+              {CATEGORY_LABELS[category] ?? category}
+            </Text>
           </Pressable>
         );
       })}

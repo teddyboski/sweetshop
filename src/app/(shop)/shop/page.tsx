@@ -13,7 +13,7 @@ export const metadata = {
   description: "Browse curated snack boxes, Build-a-Box, and individual snacks from The Sweet Shop.",
 };
 
-const CATEGORIES = ["candy", "chips", "cookies", "spicy", "salty", "sweet", "international"];
+const CATEGORIES = ["house_snacks", "candy", "chips", "cookies", "spicy", "salty", "sweet", "international"];
 
 interface ShopPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;

@@ -28,12 +28,23 @@ export function ShopHomeScreen() {
     queryKey: ["catalog", "snacks", category],
     queryFn: () => fetchSnacks({ category }),
   });
+  // Ted's in-house made items (trail mix, dipped cookies, loaded rice
+  // krispie treats) - broken out as their own shelf rather than mixed into
+  // the general "Snacks" grid, since it's a differentiator worth
+  // highlighting. Only fetched/shown on the unfiltered home view, same as
+  // Boxes below.
+  const houseSnacksQuery = useQuery({
+    queryKey: ["catalog", "snacks", "house_snacks"],
+    queryFn: () => fetchSnacks({ category: "house_snacks" }),
+    enabled: !category,
+  });
 
-  const refreshing = boxesQuery.isRefetching || snacksQuery.isRefetching;
+  const refreshing = boxesQuery.isRefetching || snacksQuery.isRefetching || houseSnacksQuery.isRefetching;
   const onRefresh = useCallback(() => {
     boxesQuery.refetch();
     snacksQuery.refetch();
-  }, [boxesQuery, snacksQuery]);
+    if (!category) houseSnacksQuery.refetch();
+  }, [boxesQuery, snacksQuery, houseSnacksQuery, category]);
 
   const isInitialLoading = boxesQuery.isPending || snacksQuery.isPending;
   const hasError = boxesQuery.isError || snacksQuery.isError;
@@ -86,6 +97,31 @@ export function ShopHomeScreen() {
                     imageUrl={box.imageUrl}
                     subtitle={box.is_subscription ? `/ ${box.cadence}` : undefined}
                     onPress={() => navigation.navigate("BoxDetail", { slug: box.slug })}
+                  />
+                )}
+              />
+            </View>
+          )}
+
+          {!category && houseSnacksQuery.data && houseSnacksQuery.data.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.houseHeadingRow}>
+                <Ionicons name="home" size={16} color={colors.primary} />
+                <Text style={styles.sectionHeading}>House Snacks</Text>
+              </View>
+              <Text style={styles.houseSubtitle}>Made in-house by us — trail mix, dipped cookies, and more.</Text>
+              <FlatList
+                data={houseSnacksQuery.data}
+                keyExtractor={(snack) => snack.id}
+                numColumns={2}
+                scrollEnabled={false}
+                columnWrapperStyle={styles.row}
+                renderItem={({ item: snack }) => (
+                  <ProductCard
+                    title={snack.name}
+                    priceCents={snack.price_cents}
+                    imageUrl={snack.imageUrl}
+                    onPress={() => navigation.navigate("SnackDetail", { slug: snack.slug })}
                   />
                 )}
               />
@@ -166,6 +202,17 @@ const styles = StyleSheet.create({
     ...typography.sizes.lg,
     fontFamily: typography.fontFamilyMedium,
     color: colors.foreground,
+    marginBottom: spacing.sm,
+  },
+  houseHeadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  houseSubtitle: {
+    ...typography.sizes.sm,
+    color: colors.mutedForeground,
+    marginTop: -spacing.xs,
     marginBottom: spacing.sm,
   },
   row: {
