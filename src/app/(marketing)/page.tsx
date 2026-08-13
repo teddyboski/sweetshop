@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { Boxes, Candy, HelpCircle, Blocks, Shirt, Gift, Share2, type LucideIcon } from "lucide-react";
+import { Boxes, Candy, HelpCircle, Blocks, Cookie, Home as HomeIcon, Shirt, Gift, Share2, type LucideIcon } from "lucide-react";
 import { SHOP_CATEGORY_LINKS } from "@/lib/shop-nav";
 
 export const metadata: Metadata = {
@@ -21,6 +21,8 @@ const TILE_DETAILS: Record<string, { icon: LucideIcon; description: string }> = 
   "/shop/candy-boxes": { icon: Candy, description: "A curated mix of candy in one box" },
   "/shop/mystery-box": { icon: HelpCircle, description: "Surprise contents, rotating regularly" },
   "/shop/build-a-box": { icon: Blocks, description: "Pick a size, then choose your own snacks" },
+  "/shop/snacks": { icon: Cookie, description: "Chips, candy, cookies & cakes, sold individually" },
+  "/shop/house-snacks": { icon: HomeIcon, description: "Made in-house by us — trail mix, dipped cookies & more" },
   "/shop/merch": { icon: Shirt, description: "Apparel & goods, made in-house" },
   "/account/rewards": { icon: Gift, description: "Track points and redeem perks" },
   "/account/referrals": { icon: Share2, description: "Give a friend a discount, get one back" },

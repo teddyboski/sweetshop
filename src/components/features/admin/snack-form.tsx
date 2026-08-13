@@ -125,9 +125,14 @@ export function SnackForm({ snack }: SnackFormProps) {
         {/* Suggestions only - free text still accepted, so this never blocks
             a genuinely new category. house_snacks added 2026-08-12 for
             Ted's in-house made items (trail mix, dipped cookies, loaded
-            rice krispie treats), kept separate from store-bought snacks. */}
+            rice krispie treats), kept separate from store-bought snacks -
+            it now has its own dedicated storefront page/tile (Milestone
+            19), not just a homepage shelf. cakes added the same milestone
+            for honey buns/pies - tagged and browsed the same way as
+            candy/chips/cookies, no dedicated page of its own. */}
         <datalist id="snack-categories">
           <option value="house_snacks" />
+          <option value="cakes" />
           <option value="candy" />
           <option value="chips" />
           <option value="cookies" />
