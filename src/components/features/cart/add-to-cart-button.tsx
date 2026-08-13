@@ -7,7 +7,8 @@ import { authenticatedFetch } from "@/lib/supabase/authenticated-fetch";
 
 type AddToCartPayload =
   | { itemType: "box"; boxSlug: string; quantity: number }
-  | { itemType: "snack"; snackId: string; quantity: number };
+  | { itemType: "snack"; snackId: string; quantity: number }
+  | { itemType: "merch"; merchVariantId: string; quantity: number };
 
 export interface AddToCartButtonProps {
   payload: AddToCartPayload;

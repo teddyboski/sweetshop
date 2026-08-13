@@ -57,6 +57,9 @@ export function CartLineRow({ line }: CartLineRowProps) {
     <div className="flex items-start justify-between gap-4 py-4">
       <div className="flex-1">
         <p className="font-medium">{line.name}</p>
+        {line.itemType === "merch" && line.variantLabel && (
+          <p className="text-sm text-muted-foreground">{line.variantLabel}</p>
+        )}
 
         {line.isBuildABox && line.snackSelections && (
           <ul className="mt-1 text-sm text-muted-foreground">
