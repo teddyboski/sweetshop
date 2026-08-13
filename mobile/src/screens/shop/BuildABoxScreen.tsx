@@ -26,7 +26,7 @@ export function BuildABoxScreen() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 
-  const boxesQuery = useQuery({ queryKey: ["catalog", "boxes"], queryFn: fetchBoxes });
+  const boxesQuery = useQuery({ queryKey: ["catalog", "boxes"], queryFn: () => fetchBoxes() });
   const snacksQuery = useQuery({ queryKey: ["catalog", "byo-snacks"], queryFn: fetchByoSnacks });
 
   const [selectedBox, setSelectedBox] = useState<CatalogBox | null>(null);
