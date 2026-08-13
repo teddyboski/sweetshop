@@ -1,9 +1,18 @@
 import { Pressable, ScrollView, StyleSheet, Text } from "react-native";
 import { colors, radii, spacing, typography } from "../../theme";
 
-/** Mirrors the CATEGORIES constant in (shop)/shop/page.tsx exactly. */
+/**
+ * Mirrors the SNACK_FILTER_CATEGORIES constant web's
+ * snack-category-chips.tsx carries. house_snacks kept in this full list
+ * since this component is generic; the new SnacksScreen (Milestone 19)
+ * passes `categories={CATEGORIES.filter((c) => c !== "house_snacks")}`
+ * since House Snacks now has its own dedicated screen/tile rather than
+ * being a sub-filter within general Snacks. cakes added the same
+ * milestone for honey buns/pies.
+ */
 export const CATEGORIES = [
   "house_snacks",
+  "cakes",
   "candy",
   "chips",
   "cookies",
@@ -16,6 +25,8 @@ export const CATEGORIES = [
 interface CategoryChipsProps {
   selected: string | undefined;
   onSelect: (category: string | undefined) => void;
+  /** Defaults to the full CATEGORIES list. */
+  categories?: readonly string[];
 }
 
 // CSS text-transform: capitalize only capitalizes per word (space-separated),
@@ -25,10 +36,10 @@ const CATEGORY_LABELS: Record<string, string> = {
   house_snacks: "House Snacks",
 };
 
-export function CategoryChips({ selected, onSelect }: CategoryChipsProps) {
+export function CategoryChips({ selected, onSelect, categories = CATEGORIES }: CategoryChipsProps) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-      {CATEGORIES.map((category) => {
+      {categories.map((category) => {
         const active = selected === category;
         return (
           <Pressable

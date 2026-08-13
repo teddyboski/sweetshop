@@ -9,6 +9,8 @@ import { MerchDetailScreen } from "../screens/shop/MerchDetailScreen";
 import { SnackBoxesScreen } from "../screens/shop/SnackBoxesScreen";
 import { CandyBoxesScreen } from "../screens/shop/CandyBoxesScreen";
 import { MysteryBoxScreen } from "../screens/shop/MysteryBoxScreen";
+import { SnacksScreen } from "../screens/shop/SnacksScreen";
+import { HouseSnacksScreen } from "../screens/shop/HouseSnacksScreen";
 import { colors } from "../theme";
 
 export type ShopStackParamList = {
@@ -22,6 +24,8 @@ export type ShopStackParamList = {
   SnackBoxes: undefined;
   CandyBoxes: undefined;
   MysteryBox: undefined;
+  Snacks: undefined;
+  HouseSnacks: undefined;
 };
 
 const Stack = createNativeStackNavigator<ShopStackParamList>();
@@ -44,6 +48,8 @@ export function ShopStack() {
       <Stack.Screen name="SnackBoxes" component={SnackBoxesScreen} options={{ title: "Snack Boxes" }} />
       <Stack.Screen name="CandyBoxes" component={CandyBoxesScreen} options={{ title: "Candy Boxes" }} />
       <Stack.Screen name="MysteryBox" component={MysteryBoxScreen} options={{ title: "Mystery Box" }} />
+      <Stack.Screen name="Snacks" component={SnacksScreen} options={{ title: "Snacks" }} />
+      <Stack.Screen name="HouseSnacks" component={HouseSnacksScreen} options={{ title: "House Snacks" }} />
     </Stack.Navigator>
   );
 }

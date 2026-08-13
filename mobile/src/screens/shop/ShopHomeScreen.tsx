@@ -1,13 +1,9 @@
-import { useCallback } from "react";
-import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useQuery } from "@tanstack/react-query";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import type { CompositeNavigationProp } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import { fetchSnacks } from "../../lib/api/catalog";
-import { ProductCard } from "../../components/shared/ProductCard";
 import { colors, spacing, typography } from "../../theme";
 import type { ShopStackParamList } from "../../navigation/ShopStack";
 import type { RootTabParamList } from "../../navigation/RootTabs";
@@ -18,7 +14,10 @@ type Nav = CompositeNavigationProp<
   BottomTabNavigationProp<RootTabParamList>
 >;
 
-type ShopTile = { kind: "shop"; screen: "SnackBoxes" | "CandyBoxes" | "MysteryBox" | "BuildABox" | "Merch" };
+type ShopTile = {
+  kind: "shop";
+  screen: "SnackBoxes" | "CandyBoxes" | "MysteryBox" | "BuildABox" | "Snacks" | "HouseSnacks" | "Merch";
+};
 type AccountTile = { kind: "account"; screen: "Rewards" | "Referrals" };
 type Tile = (ShopTile | AccountTile) & {
   icon: keyof typeof Ionicons.glyphMap;
@@ -35,12 +34,20 @@ type Tile = (ShopTile | AccountTile) & {
  * Rewards/Referrals go to their own existing screens. Rewards/Referrals
  * live on AccountStack, a different tab, hence the cross-tab navigation
  * below.
+ *
+ * Milestone 19 adds Snacks and House Snacks as their own tiles/screens.
+ * House Snacks used to be a special-cased shelf living directly on this
+ * screen (and only on mobile - web never had an equivalent) - Ted flagged
+ * that inconsistency, so it's now a full destination like everything
+ * else, and the shelf below the grid is gone.
  */
 const TILES: Tile[] = [
   { kind: "shop", screen: "SnackBoxes", icon: "cube-outline", label: "Snack Boxes", description: "Hand-packed & ready to ship" },
   { kind: "shop", screen: "CandyBoxes", icon: "gift-outline", label: "Candy Boxes", description: "A curated candy mix" },
   { kind: "shop", screen: "MysteryBox", icon: "help-circle-outline", label: "Mystery Box", description: "Surprise, rotating contents" },
   { kind: "shop", screen: "BuildABox", icon: "construct-outline", label: "Build-a-Box", description: "Pick your own snacks" },
+  { kind: "shop", screen: "Snacks", icon: "fast-food-outline", label: "Snacks", description: "Chips, candy, cookies & cakes" },
+  { kind: "shop", screen: "HouseSnacks", icon: "home-outline", label: "House Snacks", description: "Made in-house by us" },
   { kind: "shop", screen: "Merch", icon: "shirt-outline", label: "Merchandise", description: "Apparel & goods, made in-house" },
   { kind: "account", screen: "Rewards", icon: "star-outline", label: "Rewards", description: "Track points & perks" },
   { kind: "account", screen: "Referrals", icon: "people-outline", label: "Referrals", description: "Give and get a discount" },
@@ -49,18 +56,6 @@ const TILES: Tile[] = [
 export function ShopHomeScreen() {
   const navigation = useNavigation<Nav>();
   const { session } = useAuth();
-
-  // House Snacks stays as a featured shelf below the tile menu (Ted's
-  // in-house made items are a differentiator worth surfacing), even
-  // though it's not one of the dedicated-page destinations above.
-  const houseSnacksQuery = useQuery({
-    queryKey: ["catalog", "snacks", "house_snacks"],
-    queryFn: () => fetchSnacks({ category: "house_snacks" }),
-  });
-
-  const onRefresh = useCallback(() => {
-    houseSnacksQuery.refetch();
-  }, [houseSnacksQuery]);
 
   function handleTilePress(tile: Tile) {
     if (tile.kind === "account") {
@@ -75,13 +70,7 @@ export function ShopHomeScreen() {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      refreshControl={
-        <RefreshControl refreshing={houseSnacksQuery.isRefetching} onRefresh={onRefresh} tintColor={colors.primary} />
-      }
-    >
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.pageHeading}>Shop</Text>
       <Text style={styles.pageSubtitle}>Pick your box — mystery boxes rotate weekly.</Text>
 
@@ -100,31 +89,6 @@ export function ShopHomeScreen() {
           </Pressable>
         ))}
       </View>
-
-      {houseSnacksQuery.data && houseSnacksQuery.data.length > 0 && (
-        <View style={styles.section}>
-          <View style={styles.houseHeadingRow}>
-            <Ionicons name="home" size={16} color={colors.primary} />
-            <Text style={styles.sectionHeading}>House Snacks</Text>
-          </View>
-          <Text style={styles.houseSubtitle}>Made in-house by us — trail mix, dipped cookies, and more.</Text>
-          <FlatList
-            data={houseSnacksQuery.data}
-            keyExtractor={(snack) => snack.id}
-            numColumns={2}
-            scrollEnabled={false}
-            columnWrapperStyle={styles.row}
-            renderItem={({ item: snack }) => (
-              <ProductCard
-                title={snack.name}
-                priceCents={snack.price_cents}
-                imageUrl={snack.imageUrl}
-                onPress={() => navigation.navigate("SnackDetail", { slug: snack.slug })}
-              />
-            )}
-          />
-        </View>
-      )}
     </ScrollView>
   );
 }
@@ -187,29 +151,5 @@ const styles = StyleSheet.create({
   tileDescription: {
     ...typography.sizes.xs,
     color: colors.mutedForeground,
-  },
-  section: {
-    marginTop: spacing.xl,
-  },
-  sectionHeading: {
-    ...typography.sizes.lg,
-    fontFamily: typography.fontFamilyMedium,
-    color: colors.foreground,
-    marginBottom: spacing.sm,
-  },
-  houseHeadingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  houseSubtitle: {
-    ...typography.sizes.sm,
-    color: colors.mutedForeground,
-    marginTop: -spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  row: {
-    gap: spacing.md,
-    marginBottom: spacing.md,
   },
 });
