@@ -98,6 +98,7 @@ export type Database = {
         Row: {
           box_type: string
           cadence: string | null
+          category: string | null
           created_at: string
           deleted_at: string | null
           description: string | null
@@ -114,6 +115,7 @@ export type Database = {
         Insert: {
           box_type?: string
           cadence?: string | null
+          category?: string | null
           created_at?: string
           deleted_at?: string | null
           description?: string | null
@@ -130,6 +132,7 @@ export type Database = {
         Update: {
           box_type?: string
           cadence?: string | null
+          category?: string | null
           created_at?: string
           deleted_at?: string | null
           description?: string | null

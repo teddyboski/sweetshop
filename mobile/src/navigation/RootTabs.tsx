@@ -1,16 +1,22 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import type { NavigatorScreenParams } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { ShopStack } from "./ShopStack";
 import { SearchStack } from "./SearchStack";
 import { CartStack } from "./CartStack";
-import { AccountStack } from "./AccountStack";
+import { AccountStack, type AccountStackParamList } from "./AccountStack";
 import { colors } from "../theme";
 
 export type RootTabParamList = {
   ShopTab: undefined;
   SearchTab: undefined;
   CartTab: undefined;
-  AccountTab: undefined;
+  // NavigatorScreenParams (not `undefined`) so screens on other tabs can
+  // deep-link into a specific AccountStack screen, e.g.
+  // navigation.navigate("AccountTab", { screen: "Rewards" }) - Milestone
+  // 18's homepage/Shop tile menu needs this for the Rewards/Referrals
+  // tiles, which live on this tab, not ShopStack.
+  AccountTab: NavigatorScreenParams<AccountStackParamList>;
 };
 
 const Tab = createBottomTabNavigator<RootTabParamList>();

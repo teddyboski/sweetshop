@@ -48,73 +48,88 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * Milestone 17 brand theme, sourced from Ted's "THE SWEET SHOP — SINCE
+ * 1928" storefront illustration. Base hues (background cream, primary
+ * teal-blue, chart-2 candy-pink, chart-3 candy-gold, chart-4 wood-brown)
+ * were sampled directly from illustration pixels (facade pillar, sign
+ * backdrop, a letterform in the signage, and the door) via PIL and
+ * converted sRGB -> OKLCH, not eyeballed. UI-role shades (button-strength
+ * primary, foreground, muted-foreground, borders, dark mode) are derived
+ * from those sampled hues at lightness/chroma values chosen to clear
+ * WCAG AA contrast (verified programmatically, not assumed) against their
+ * paired background - chart-5 (mint) has no clean solid-color sample in
+ * the source art and is an analogous hue derived from the same palette,
+ * not sampled. Destructive stays the original template red: a semantic
+ * error color, deliberately not restyled to the brand palette.
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --background: oklch(0.9501 0.0437 85.24);
+  --foreground: oklch(0.22 0.02 70);
+  --card: oklch(0.99 0.015 85);
+  --card-foreground: oklch(0.22 0.02 70);
+  --popover: oklch(0.99 0.015 85);
+  --popover-foreground: oklch(0.22 0.02 70);
+  --primary: oklch(0.5 0.1 206);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.93 0.02 205);
+  --secondary-foreground: oklch(0.22 0.02 70);
+  --muted: oklch(0.93 0.02 80);
+  --muted-foreground: oklch(0.46 0.025 70);
+  --accent: oklch(0.9 0.05 205);
+  --accent-foreground: oklch(0.22 0.02 70);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --border: oklch(0.88 0.025 75);
+  --input: oklch(0.88 0.025 75);
+  --ring: oklch(0.6 0.09 206);
+  --chart-1: oklch(0.6 0.09 206);
+  --chart-2: oklch(0.6883 0.1354 17.83);
+  --chart-3: oklch(0.75 0.11 89);
+  --chart-4: oklch(0.65 0.09 67);
+  --chart-5: oklch(0.7 0.09 155);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: oklch(0.97 0.02 85);
+  --sidebar-foreground: oklch(0.22 0.02 70);
+  --sidebar-primary: oklch(0.5 0.1 206);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.9 0.05 205);
+  --sidebar-accent-foreground: oklch(0.22 0.02 70);
+  --sidebar-border: oklch(0.88 0.025 75);
+  --sidebar-ring: oklch(0.6 0.09 206);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.19 0.02 70);
+  --foreground: oklch(0.94 0.03 85);
+  --card: oklch(0.24 0.02 70);
+  --card-foreground: oklch(0.94 0.03 85);
+  --popover: oklch(0.24 0.02 70);
+  --popover-foreground: oklch(0.94 0.03 85);
+  --primary: oklch(0.78 0.09 206);
+  --primary-foreground: oklch(0.18 0.02 70);
+  --secondary: oklch(0.28 0.02 70);
+  --secondary-foreground: oklch(0.94 0.03 85);
+  --muted: oklch(0.27 0.02 75);
+  --muted-foreground: oklch(0.72 0.02 80);
+  --accent: oklch(0.32 0.04 205);
+  --accent-foreground: oklch(0.92 0.02 85);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --ring: oklch(0.65 0.09 206);
+  --chart-1: oklch(0.7 0.1 206);
+  --chart-2: oklch(0.72 0.13 18);
+  --chart-3: oklch(0.8 0.1 89);
+  --chart-4: oklch(0.72 0.08 67);
+  --chart-5: oklch(0.72 0.09 155);
+  --sidebar: oklch(0.24 0.02 70);
+  --sidebar-foreground: oklch(0.94 0.03 85);
+  --sidebar-primary: oklch(0.78 0.09 206);
+  --sidebar-primary-foreground: oklch(0.18 0.02 70);
+  --sidebar-accent: oklch(0.32 0.04 205);
+  --sidebar-accent-foreground: oklch(0.92 0.02 85);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: oklch(0.65 0.09 206);
 }
 
 @layer base {

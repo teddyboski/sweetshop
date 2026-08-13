@@ -1,35 +1,38 @@
 /**
  * Sweet Shop brand palette.
  *
- * The web app currently only has shadcn/ui's default grayscale theme (see
- * src/app/globals.css at the repo root) — no brand colors were ever
- * established there. This is the first real Sweet Shop color system,
- * built for mobile per Milestone 11's design-system pass, approved by Ted
- * 2026-08-07. Worth backporting to web later so both platforms match.
+ * Milestone 17: replaces the ad-hoc orange palette from Milestone 11 with
+ * colors sourced from Ted's "THE SWEET SHOP — SINCE 1928" storefront
+ * illustration, matching the web app's src/app/globals.css (see that
+ * file's header comment for the full sampling methodology - facade
+ * teal-blue, cream signage backdrop, and candy-pink lettering sampled
+ * directly from illustration pixels via PIL, converted sRGB -> OKLCH).
+ * `primary` and `accent` are the sampled hues deepened in lightness so
+ * white text on top clears WCAG AA (verified programmatically), same
+ * technique used for the web theme's --primary.
  *
- * Warm/appetizing palette for a snack-box brand: cream background (not
- * stark white — reads bakery/candy-shop, not clinical), a warm orange
- * primary, and a berry-red accent reserved for urgency/CTA moments
- * (drop countdowns, "Buy Now", low-stock badges).
+ * accent keeps its Milestone 11 role (urgency/CTA: drop countdowns, "Buy
+ * Now", low-stock badges) - now a deepened candy-pink instead of orange,
+ * still visually distinct from the calmer teal primary.
  */
 export const colors = {
-  background: "#FFFBF5",
-  foreground: "#2B1E17",
+  background: "#FCEDCE",
+  foreground: "#211910",
 
-  card: "#FFFFFF",
-  cardForeground: "#2B1E17",
+  card: "#FFFBF1",
+  cardForeground: "#211910",
 
-  primary: "#E8703A",
+  primary: "#00737F",
   primaryForeground: "#FFFFFF",
 
-  secondary: "#F4E9DD",
-  secondaryForeground: "#2B1E17",
+  secondary: "#D9ECEE",
+  secondaryForeground: "#211910",
 
-  accent: "#D63447",
+  accent: "#BC3F4D",
   accentForeground: "#FFFFFF",
 
-  muted: "#F0E4D8",
-  mutedForeground: "#8A7867",
+  muted: "#EFE7D9",
+  mutedForeground: "#615649",
 
   success: "#3F9142",
   successForeground: "#FFFFFF",
@@ -37,9 +40,9 @@ export const colors = {
   destructive: "#C4342B",
   destructiveForeground: "#FFFFFF",
 
-  border: "#E7D9C9",
-  input: "#E7D9C9",
-  ring: "#E8703A",
+  border: "#E1D6C6",
+  input: "#E1D6C6",
+  ring: "#00737F",
 } as const;
 
 export type ColorToken = keyof typeof colors;

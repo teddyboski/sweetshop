@@ -13,8 +13,6 @@ export const metadata = {
   description: "Browse curated snack boxes, Build-a-Box, and individual snacks from The Sweet Shop.",
 };
 
-const CATEGORIES = ["house_snacks", "candy", "chips", "cookies", "spicy", "salty", "sweet", "international"];
-
 interface ShopPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
@@ -35,8 +33,14 @@ export default async function ShopHome({ searchParams }: ShopPageProps) {
     boxes = (results.boxes ?? []) as typeof boxes;
     snacks = (results.snacks ?? []) as typeof snacks;
   } else {
-    // Boxes have no category/tag column - only snacks are filterable that way.
-    // A category/tag filter narrows the snacks grid; boxes always show in full.
+    // Milestone 18: this page is now the catch-all "browse/search
+    // everything" fallback, not the primary shop entry point - each box
+    // category (Snack Boxes, Candy Boxes, Mystery Box, Build-a-Box) and
+    // Merchandise now has its own dedicated page/tile off the homepage,
+    // reachable from SiteHeader everywhere. The category-pill filter UI
+    // that used to live here is gone for that reason (a direct
+    // /shop?category=... link still narrows the snacks grid below, kept
+    // working for any old bookmarks/links, just with no visible pill nav).
     [boxes, snacks] = await Promise.all([
       getActiveBoxes(),
       getSellableSnacks({ category: query.category, tag: query.tag }),
@@ -49,7 +53,7 @@ export default async function ShopHome({ searchParams }: ShopPageProps) {
     <div className="mx-auto max-w-6xl px-4 py-8">
       <h1 className="font-heading text-2xl font-semibold">Shop</h1>
       <p className="mt-1 text-muted-foreground">
-        Curated snack boxes, Build-a-Box, and individual snacks — contents on mystery boxes rotate weekly.
+        Search or browse everything at once — or pick a specific category from the menu above.
       </p>
 
       <form className="mt-6 flex flex-wrap items-center gap-2" role="search">
@@ -62,22 +66,6 @@ export default async function ShopHome({ searchParams }: ShopPageProps) {
           aria-label="Search catalog"
         />
       </form>
-
-      <nav className="mt-4 flex flex-wrap gap-2" aria-label="Filter by category">
-        {CATEGORIES.map((category) => (
-          <Link
-            key={category}
-            href={query.category === category ? "/shop" : `/shop?category=${category}`}
-            className={`rounded-full border px-3 py-1 text-xs font-medium capitalize ${
-              query.category === category
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-background hover:bg-muted"
-            }`}
-          >
-            {category}
-          </Link>
-        ))}
-      </nav>
 
       {noResults ? (
         <div className="mt-16 flex flex-col items-center gap-3 text-center text-muted-foreground">

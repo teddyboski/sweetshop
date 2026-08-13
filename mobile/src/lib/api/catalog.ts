@@ -19,6 +19,9 @@ export interface CatalogBox {
   is_subscription: boolean;
   cadence: string | null;
   box_type: "curated" | "mystery" | "build_a_box";
+  // Milestone 18: which dedicated shop screen this box belongs on -
+  // orthogonal to box_type, unset until Ted tags a box from Admin.
+  category: "snack_box" | "candy_box" | "mystery_box" | "passport_box" | null;
   slot_count: number | null;
   imageUrl: string | null;
 }
@@ -102,8 +105,11 @@ async function unwrapEnvelope<T>(response: Response): Promise<T> {
   return body.data as T;
 }
 
-export async function fetchBoxes(): Promise<CatalogBox[]> {
-  const response = await authenticatedFetch("/api/catalog/boxes");
+export async function fetchBoxes(filters: { category?: string } = {}): Promise<CatalogBox[]> {
+  const params = new URLSearchParams();
+  if (filters.category) params.set("category", filters.category);
+  const qs = params.toString();
+  const response = await authenticatedFetch(`/api/catalog/boxes${qs ? `?${qs}` : ""}`);
   return unwrapEnvelope<CatalogBox[]>(response);
 }
 
