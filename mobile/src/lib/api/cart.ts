@@ -33,7 +33,7 @@ export async function cartFetch(path: string, init: RequestInit = {}): Promise<R
 
 export interface CartLine {
   id: string;
-  itemType: "box" | "snack";
+  itemType: "box" | "snack" | "merch";
   quantity: number;
   unitPriceCents: number;
   name: string;
@@ -43,6 +43,8 @@ export interface CartLine {
   isSubscription: boolean;
   cadence: string | null;
   snackSelections?: Array<{ snackId: string; name: string; quantity: number }>;
+  /** Set only on merch lines, e.g. "Medium / Navy". */
+  variantLabel?: string | null;
 }
 
 export interface CartTotal {
@@ -107,6 +109,17 @@ export async function addSnackToCart(snackId: string, quantity = 1): Promise<Add
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ itemType: "snack", snackId, quantity }),
+  });
+  const data = await unwrapEnvelope<AddItemResult>(response);
+  await persistAnonymousId(data);
+  return data;
+}
+
+export async function addMerchToCart(merchVariantId: string, quantity = 1): Promise<AddItemResult> {
+  const response = await cartFetch("/api/cart/items", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ itemType: "merch", merchVariantId, quantity }),
   });
   const data = await unwrapEnvelope<AddItemResult>(response);
   await persistAnonymousId(data);

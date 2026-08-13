@@ -18,7 +18,7 @@ type Nav = CompositeNavigationProp<
   BottomTabNavigationProp<RootTabParamList>
 >;
 
-type ShopTile = { kind: "shop"; screen: "SnackBoxes" | "CandyBoxes" | "MysteryBox" | "BuildABox" };
+type ShopTile = { kind: "shop"; screen: "SnackBoxes" | "CandyBoxes" | "MysteryBox" | "BuildABox" | "Merch" };
 type AccountTile = { kind: "account"; screen: "Rewards" | "Referrals" };
 type Tile = (ShopTile | AccountTile) & {
   icon: keyof typeof Ionicons.glyphMap;
@@ -31,20 +31,17 @@ type Tile = (ShopTile | AccountTile) & {
  * SHOP_CATEGORY_LINKS, reached the same way - choosing a curated/mystery
  * box category goes to its own listing screen, Build-a-Box goes straight
  * into the build flow (already true - that screen has never been a
- * listing), Rewards/Referrals go to their own existing screens.
- * Rewards/Referrals live on AccountStack, a different tab, hence the
- * cross-tab navigation below.
- *
- * NOTE: Merchandise (Milestone 16) isn't merged to main yet as of this
- * writing, so its ShopStack screens don't exist on this branch - add a
- * Merch tile here once that lands and this branch picks it up, matching
- * the web tile grid's Merchandise entry.
+ * listing), Merchandise (Milestone 16) goes to its own listing screen,
+ * Rewards/Referrals go to their own existing screens. Rewards/Referrals
+ * live on AccountStack, a different tab, hence the cross-tab navigation
+ * below.
  */
 const TILES: Tile[] = [
   { kind: "shop", screen: "SnackBoxes", icon: "cube-outline", label: "Snack Boxes", description: "Hand-packed & ready to ship" },
   { kind: "shop", screen: "CandyBoxes", icon: "gift-outline", label: "Candy Boxes", description: "A curated candy mix" },
   { kind: "shop", screen: "MysteryBox", icon: "help-circle-outline", label: "Mystery Box", description: "Surprise, rotating contents" },
   { kind: "shop", screen: "BuildABox", icon: "construct-outline", label: "Build-a-Box", description: "Pick your own snacks" },
+  { kind: "shop", screen: "Merch", icon: "shirt-outline", label: "Merchandise", description: "Apparel & goods, made in-house" },
   { kind: "account", screen: "Rewards", icon: "star-outline", label: "Rewards", description: "Track points & perks" },
   { kind: "account", screen: "Referrals", icon: "people-outline", label: "Referrals", description: "Give and get a discount" },
 ];

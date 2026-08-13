@@ -190,7 +190,7 @@ async function createOrderFromSession(
 
     const { data: cartItem } = await admin
       .from("cart_items")
-      .select("item_type, box_id, snack_id, boxes(is_subscription)")
+      .select("item_type, box_id, snack_id, merch_item_id, merch_variant_id, boxes(is_subscription)")
       .eq("id", cartItemId)
       .maybeSingle();
 
@@ -215,6 +215,8 @@ async function createOrderFromSession(
         item_type: cartItem.item_type,
         box_id: cartItem.box_id,
         snack_id: cartItem.snack_id,
+        merch_item_id: cartItem.merch_item_id,
+        merch_variant_id: cartItem.merch_variant_id,
         quantity: item.quantity ?? 1,
         unit_price_cents: item.price?.unit_amount ?? 0,
       })
@@ -762,6 +764,8 @@ async function createOrderFromPaymentIntent(
         item_type: line.itemType,
         box_id: line.boxId,
         snack_id: line.snackId,
+        merch_item_id: line.merchItemId,
+        merch_variant_id: line.merchVariantId,
         quantity: line.quantity,
         unit_price_cents: line.unitPriceCents,
       })

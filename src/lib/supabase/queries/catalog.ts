@@ -1,4 +1,5 @@
 import { createPublicSupabaseClient } from "@/lib/supabase/public";
+import { resolveMerchPriceCents } from "@/lib/merch/resolve-price";
 
 interface ProductImageRow {
   image_url: string;
@@ -164,5 +165,61 @@ export async function searchCatalog(query: string) {
   return {
     boxes: boxes.data?.map(({ product_images, ...box }) => ({ ...box, imageUrl: primaryImageUrl(product_images) })),
     snacks: snacks.data?.map(({ product_images, ...snack }) => ({ ...snack, imageUrl: primaryImageUrl(product_images) })),
+  };
+}
+
+// =========================================================================
+// Merchandise (Milestone 16) - mirrors the snacks queries above. No stock
+// count is exposed here, same as snacks: merch_inventory is admin-only per
+// its own migration comment, and this storefront layer doesn't compute an
+// in-stock/low-stock boolean for snacks either yet - merch stays at parity,
+// not ahead of it.
+// =========================================================================
+
+export async function getMerchItems(filters: { category?: string } = {}) {
+  const supabase = createPublicSupabaseClient();
+  let query = supabase
+    .from("merch_items")
+    .select("id, slug, name, description, category, price_cents, product_images(image_url, is_primary)")
+    .eq("status", "active")
+    .order("name");
+
+  if (filters.category) query = query.eq("category", filters.category);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data.map(({ product_images, ...item }) => ({
+    ...item,
+    imageUrl: primaryImageUrl(product_images),
+  }));
+}
+
+export async function getMerchItemBySlug(slug: string) {
+  const supabase = createPublicSupabaseClient();
+  const { data, error } = await supabase
+    .from("merch_items")
+    .select(
+      "id, slug, name, description, category, price_cents, product_images(image_url, is_primary), merch_variants(id, size, color, price_cents_override, status)"
+    )
+    .eq("slug", slug)
+    .eq("status", "active")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return data;
+  const { product_images, merch_variants, ...item } = data;
+  // Filtered in JS rather than as a PostgREST embed filter (e.g.
+  // `.eq("merch_variants.status", ...)`), which would need `!inner` and
+  // turn this into an inner join - excluding an otherwise-active item that
+  // happens to have zero currently-active variants, instead of just
+  // showing it with an empty variant list.
+  return {
+    ...item,
+    imageUrl: primaryImageUrl(product_images),
+    variants: merch_variants
+      .filter((variant) => variant.status === "active")
+      .map(({ status: _status, ...variant }) => ({
+        ...variant,
+        resolvedPriceCents: resolveMerchPriceCents(item, variant),
+      })),
   };
 }

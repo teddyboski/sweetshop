@@ -58,4 +58,24 @@ describe("calculateCartTotal", () => {
     const result = calculateCartTotal([{ itemType: "box", unitPriceCents: 1500, quantity: 3 }]);
     expect(result.subtotalCents).toBe(4500);
   });
+
+  it("treats a merch-only cart under $25 the same as snack-only - $5 shipping, no box to waive it", () => {
+    const result = calculateCartTotal([{ itemType: "merch", unitPriceCents: 2000, quantity: 1 }]);
+
+    expect(result.hasBox).toBe(false);
+    expect(result.shippingCents).toBe(500);
+    expect(result.totalCents).toBe(2500);
+  });
+
+  it("waives shipping for a mixed snack+merch cart once a box is added", () => {
+    const result = calculateCartTotal([
+      { itemType: "merch", unitPriceCents: 2000, quantity: 1 },
+      { itemType: "snack", unitPriceCents: 300, quantity: 1 },
+      { itemType: "box", unitPriceCents: 1500, quantity: 1 },
+    ]);
+
+    expect(result.hasBox).toBe(true);
+    expect(result.shippingCents).toBe(0);
+    expect(result.subtotalCents).toBe(3800);
+  });
 });

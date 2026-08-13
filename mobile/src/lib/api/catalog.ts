@@ -67,6 +67,31 @@ export interface SearchResults {
   snacks: Array<Pick<CatalogSnack, "id" | "slug" | "name" | "price_cents" | "imageUrl">>;
 }
 
+// Milestone 16: mirrors CatalogSnack/CatalogSnackDetail's own split -
+// CatalogMerchItem for the list, CatalogMerchItemDetail (with variants) for
+// the detail screen's picker.
+export interface CatalogMerchItem {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+  price_cents: number;
+  imageUrl: string | null;
+}
+
+export interface MerchVariant {
+  id: string;
+  size: string | null;
+  color: string | null;
+  price_cents_override: number | null;
+  resolvedPriceCents: number;
+}
+
+export interface CatalogMerchItemDetail extends CatalogMerchItem {
+  variants: MerchVariant[];
+}
+
 interface Envelope<T> {
   data: T | null;
   error: { message: string } | null;
@@ -120,4 +145,17 @@ export async function fetchActiveDrops(): Promise<CatalogDrop[]> {
 export async function fetchByoSnacks(): Promise<ByoSnack[]> {
   const response = await authenticatedFetch("/api/catalog/byo-snacks");
   return unwrapEnvelope<ByoSnack[]>(response);
+}
+
+export async function fetchMerchItems(filters: { category?: string } = {}): Promise<CatalogMerchItem[]> {
+  const params = new URLSearchParams();
+  if (filters.category) params.set("category", filters.category);
+  const qs = params.toString();
+  const response = await authenticatedFetch(`/api/catalog/merch${qs ? `?${qs}` : ""}`);
+  return unwrapEnvelope<CatalogMerchItem[]>(response);
+}
+
+export async function fetchMerchItemBySlug(slug: string): Promise<CatalogMerchItemDetail> {
+  const response = await authenticatedFetch(`/api/catalog/merch/${encodeURIComponent(slug)}`);
+  return unwrapEnvelope<CatalogMerchItemDetail>(response);
 }

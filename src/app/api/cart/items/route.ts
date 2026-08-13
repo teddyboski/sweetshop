@@ -25,7 +25,9 @@ export async function POST(request: NextRequest) {
       ? await prepareBuildABoxItem(admin, parsed.data)
       : parsed.data.itemType === "box"
         ? await prepareBoxItem(admin, parsed.data)
-        : await prepareSnackItem(admin, parsed.data);
+        : parsed.data.itemType === "snack"
+          ? await prepareSnackItem(admin, parsed.data)
+          : await prepareMerchItem(admin, parsed.data);
 
   if (itemResult.error) {
     return NextResponse.json({ data: null, error: { message: itemResult.error } }, { status: itemResult.status! });
@@ -37,13 +39,20 @@ export async function POST(request: NextRequest) {
   }
   const cartId = cartResult.cartId!;
 
+  // Derived from which id PreparedItem actually populated, not re-read
+  // from the request body - merch is checked first since a merch line
+  // carries both merchItemId and merchVariantId, snack next, box last.
+  const itemType = itemResult.merchVariantId ? "merch" : itemResult.snackId ? "snack" : "box";
+
   const { data: cartItem, error: cartItemError } = await admin
     .from("cart_items")
     .insert({
       cart_id: cartId,
-      item_type: itemResult.snackId ? "snack" : "box",
+      item_type: itemType,
       box_id: itemResult.boxId ?? null,
       snack_id: itemResult.snackId ?? null,
+      merch_item_id: itemResult.merchItemId ?? null,
+      merch_variant_id: itemResult.merchVariantId ?? null,
       quantity: itemResult.quantity!,
     })
     .select("id")
@@ -92,6 +101,8 @@ export async function POST(request: NextRequest) {
 interface PreparedItem {
   boxId?: string;
   snackId?: string;
+  merchItemId?: string;
+  merchVariantId?: string;
   quantity?: number;
   snackSelections?: Array<{ snackId: string; quantity: number }>;
   error?: string;
@@ -174,4 +185,22 @@ async function prepareSnackItem(
   }
 
   return { snackId: snack.id, quantity: data.quantity };
+}
+
+async function prepareMerchItem(
+  admin: ReturnType<typeof createAdminSupabaseClient>,
+  data: Extract<import("@/lib/validations/cart").AddToCartInput, { itemType: "merch" }>
+): Promise<PreparedItem> {
+  const { data: variant, error } = await admin
+    .from("merch_variants")
+    .select("id, merch_item_id, merch_items(status)")
+    .eq("id", data.merchVariantId)
+    .maybeSingle();
+
+  if (error) return { error: error.message, status: 500 };
+  if (!variant || variant.merch_items?.status !== "active") {
+    return { error: "Item not found", status: 404 };
+  }
+
+  return { merchItemId: variant.merch_item_id, merchVariantId: variant.id, quantity: data.quantity };
 }

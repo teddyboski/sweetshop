@@ -101,6 +101,27 @@ describe("addToCartSchema - snack variant", () => {
   });
 });
 
+describe("addToCartSchema - merch variant", () => {
+  const validVariantId = "33333333-3333-4333-8333-333333333333";
+
+  it("accepts a valid submission", () => {
+    const result = addToCartSchema.parse({ itemType: "merch", merchVariantId: validVariantId, quantity: 1 });
+    expect(result).toEqual({ itemType: "merch", merchVariantId: validVariantId, quantity: 1 });
+  });
+
+  it("rejects a non-uuid merchVariantId", () => {
+    expect(() =>
+      addToCartSchema.parse({ itemType: "merch", merchVariantId: "nope", quantity: 1 })
+    ).toThrow();
+  });
+
+  it("rejects a zero quantity", () => {
+    expect(() =>
+      addToCartSchema.parse({ itemType: "merch", merchVariantId: validVariantId, quantity: 0 })
+    ).toThrow();
+  });
+});
+
 describe("addToCartSchema - discriminator", () => {
   it("rejects an unknown itemType", () => {
     expect(() => addToCartSchema.parse({ itemType: "gift-card", quantity: 1 })).toThrow();

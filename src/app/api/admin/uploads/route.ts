@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
   const file = formData.get("file");
   const boxId = formData.get("boxId");
   const snackId = formData.get("snackId");
+  const merchId = formData.get("merchId");
   const isPrimary = formData.get("isPrimary") === "true";
   const altText = formData.get("altText");
 
@@ -43,17 +44,28 @@ export async function POST(request: NextRequest) {
   if (file.size > MAX_FILE_SIZE_BYTES) {
     return NextResponse.json({ data: null, error: "File exceeds the 5 MB size limit" }, { status: 400 });
   }
-  if (typeof boxId !== "string" && typeof snackId !== "string") {
-    return NextResponse.json({ data: null, error: "Either boxId or snackId is required" }, { status: 400 });
+
+  // Milestone 16: widened from a boxId/snackId XOR to an exactly-one-of
+  // across three owner ids, matching product_images_owner_check's own
+  // 3-way constraint added in the same migration.
+  const ownerIds = [boxId, snackId, merchId].filter((id) => typeof id === "string");
+  if (ownerIds.length === 0) {
+    return NextResponse.json({ data: null, error: "One of boxId, snackId, or merchId is required" }, { status: 400 });
   }
-  if (typeof boxId === "string" && typeof snackId === "string") {
-    return NextResponse.json({ data: null, error: "Provide only one of boxId or snackId, not both" }, { status: 400 });
+  if (ownerIds.length > 1) {
+    return NextResponse.json(
+      { data: null, error: "Provide only one of boxId, snackId, or merchId, not more than one" },
+      { status: 400 }
+    );
   }
+
+  const ownerColumn = typeof boxId === "string" ? "box_id" : typeof snackId === "string" ? "snack_id" : "merch_item_id";
+  const ownerFolder = typeof boxId === "string" ? "boxes" : typeof snackId === "string" ? "snacks" : "merch";
+  const entityId = ownerIds[0] as string;
 
   const admin = createAdminSupabaseClient();
   const extension = EXTENSION_BY_MIME[file.type];
-  const entityId = (boxId as string | null) ?? (snackId as string);
-  const path = `${typeof boxId === "string" ? "boxes" : "snacks"}/${entityId}/${crypto.randomUUID()}.${extension}`;
+  const path = `${ownerFolder}/${entityId}/${crypto.randomUUID()}.${extension}`;
 
   const { error: uploadError } = await admin.storage
     .from("product-images")
@@ -68,14 +80,10 @@ export async function POST(request: NextRequest) {
 
   // Same default-swap pattern as Milestone 7's customer_addresses: unset
   // any existing primary before inserting the new one, since the unique
-  // partial index (one primary per box/snack) would otherwise reject the
-  // insert while an old primary row still holds that flag.
+  // partial index (one primary per box/snack/merch item) would otherwise
+  // reject the insert while an old primary row still holds that flag.
   if (isPrimary) {
-    await admin
-      .from("product_images")
-      .update({ is_primary: false })
-      .eq(typeof boxId === "string" ? "box_id" : "snack_id", entityId)
-      .eq("is_primary", true);
+    await admin.from("product_images").update({ is_primary: false }).eq(ownerColumn, entityId).eq("is_primary", true);
   }
 
   const { data: image, error: insertError } = await admin
@@ -83,6 +91,7 @@ export async function POST(request: NextRequest) {
     .insert({
       box_id: typeof boxId === "string" ? boxId : null,
       snack_id: typeof snackId === "string" ? snackId : null,
+      merch_item_id: typeof merchId === "string" ? merchId : null,
       image_url: publicUrl,
       alt_text: typeof altText === "string" ? altText : null,
       is_primary: isPrimary,
