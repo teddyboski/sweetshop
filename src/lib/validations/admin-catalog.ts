@@ -53,6 +53,13 @@ export const createSnackSchema = z.object({
   isSellableIndividually: z.boolean().default(false),
   isByoEligible: z.boolean().default(true),
   status: z.enum(SNACK_STATUSES).default("active"),
+  // Creating a snack used to leave it with zero rows in `inventory` at
+  // all (not even a 0) - it simply couldn't be found on the Inventory
+  // page or stocked afterward, since adjust_inventory's RPC only UPDATEs
+  // an existing row. Ted, 2026-08-12: "I don't see a place to put the
+  // amount of this specific snack when I try to create it." Every snack
+  // now gets an inventory row the moment it's created, defaulting to 0.
+  initialQuantity: z.number().int().min(0).default(0),
 });
 export type CreateSnackInput = z.infer<typeof createSnackSchema>;
 

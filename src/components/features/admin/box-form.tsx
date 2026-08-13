@@ -20,7 +20,10 @@ export function BoxForm({ box }: BoxFormProps) {
   const [slug, setSlug] = useState(box?.slug ?? "");
   const [title, setTitle] = useState(box?.title ?? "");
   const [description, setDescription] = useState(box?.description ?? "");
-  const [priceCents, setPriceCents] = useState(box ? String(box.price_cents) : "");
+  // Priced in dollars in the UI, converted to cents on submit - same fix
+  // as snack-form.tsx (2026-08-12), same bug ("expected int, received
+  // number" from typing e.g. "15.00" into a raw-cents field).
+  const [priceDollars, setPriceDollars] = useState(box ? (box.price_cents / 100).toFixed(2) : "");
   const [isSubscription, setIsSubscription] = useState(box?.is_subscription ?? false);
   const [boxType, setBoxType] = useState(box?.box_type ?? "curated");
   const [slotCount, setSlotCount] = useState(box?.slot_count ? String(box.slot_count) : "");
@@ -38,7 +41,7 @@ export function BoxForm({ box }: BoxFormProps) {
       ...(isEditing ? {} : { slug }),
       title,
       description: description || null,
-      priceCents: Number(priceCents),
+      priceCents: Math.round(Number(priceDollars) * 100),
       isSubscription,
       boxType,
       slotCount: boxType === "build_a_box" ? Number(slotCount) : null,
@@ -96,12 +99,15 @@ export function BoxForm({ box }: BoxFormProps) {
         <Input id="description" value={description ?? ""} onChange={(e) => setDescription(e.target.value)} />
       </div>
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="priceCents" className="text-sm font-medium">Price (cents)</label>
+        <label htmlFor="priceDollars" className="text-sm font-medium">Price ($)</label>
         <Input
-          id="priceCents"
+          id="priceDollars"
           type="number"
-          value={priceCents}
-          onChange={(e) => setPriceCents(e.target.value)}
+          step="0.01"
+          min="0"
+          placeholder="e.g. 15.00"
+          value={priceDollars}
+          onChange={(e) => setPriceDollars(e.target.value)}
           required
         />
       </div>
