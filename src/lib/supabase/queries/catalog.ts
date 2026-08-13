@@ -10,15 +10,19 @@ function primaryImageUrl(images: ProductImageRow[] | null | undefined): string |
   return images.find((img) => img.is_primary)?.image_url ?? images[0].image_url;
 }
 
-export async function getActiveBoxes() {
+export async function getActiveBoxes(filters: { category?: string } = {}) {
   const supabase = createPublicSupabaseClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("boxes")
     .select(
-      "id, slug, title, description, price_cents, is_subscription, cadence, box_type, slot_count, product_images(image_url, is_primary)"
+      "id, slug, title, description, price_cents, is_subscription, cadence, box_type, category, slot_count, product_images(image_url, is_primary)"
     )
     .eq("status", "active")
     .order("title");
+
+  if (filters.category) query = query.eq("category", filters.category);
+
+  const { data, error } = await query;
   if (error) throw error;
   return data.map(({ product_images, ...box }) => ({
     ...box,

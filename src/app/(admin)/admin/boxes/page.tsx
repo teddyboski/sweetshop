@@ -18,7 +18,7 @@ export default async function AdminBoxesPage({ searchParams }: AdminBoxesPagePro
   const admin = createAdminSupabaseClient();
   let query = admin
     .from("boxes")
-    .select("id, slug, title, price_cents, status, is_subscription")
+    .select("id, slug, title, price_cents, status, is_subscription, category")
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
   if (!includeArchived) {
@@ -58,6 +58,7 @@ export default async function AdminBoxesPage({ searchParams }: AdminBoxesPagePro
                   <p className="text-muted-foreground">
                     {box.slug} - {box.status}
                     {box.is_subscription ? " - subscription" : ""}
+                    {box.category ? ` - ${box.category.replace(/_/g, " ")}` : " - no category yet"}
                   </p>
                 </div>
                 <span className="font-medium">{formatPriceCents(box.price_cents)}</span>
