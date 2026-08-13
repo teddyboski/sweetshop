@@ -6,6 +6,7 @@ import { fetchSnackBySlug } from "../../lib/api/catalog";
 import { addSnackToCart } from "../../lib/api/cart";
 import { ProductImage } from "../../components/shared/ProductImage";
 import { formatPriceCents } from "../../lib/utils/format";
+import { useToast } from "../../lib/toast/toast-context";
 import { colors, radii, spacing, typography } from "../../theme";
 import type { ShopStackParamList } from "../../navigation/ShopStack";
 
@@ -15,6 +16,7 @@ type Route = RouteProp<ShopStackParamList, "SnackDetail">;
 export function SnackDetailScreen() {
   const { params } = useRoute<Route>();
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const { data: snack, isPending, isError } = useQuery({
     queryKey: ["catalog", "snack", params.slug],
     queryFn: () => fetchSnackBySlug(params.slug),
@@ -22,7 +24,11 @@ export function SnackDetailScreen() {
 
   const addMutation = useMutation({
     mutationFn: (snackId: string) => addSnackToCart(snackId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cart"] });
+      showToast(`${snack?.name ?? "Snack"} added to cart`);
+    },
+    onError: (err: Error) => showToast(err.message || "Couldn't add to cart", "error"),
   });
 
   if (isPending) {
@@ -65,7 +71,7 @@ export function SnackDetailScreen() {
       )}
 
       <Pressable
-        style={styles.addButton}
+        style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
         disabled={addMutation.isPending}
         onPress={() => addMutation.mutate(snack.id)}
       >
@@ -135,6 +141,10 @@ const styles = StyleSheet.create({
     borderRadius: radii.full,
     paddingVertical: spacing.md,
     alignItems: "center",
+  },
+  addButtonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
   },
   addButtonText: {
     ...typography.sizes.base,

@@ -7,6 +7,7 @@ import { fetchBoxBySlug } from "../../lib/api/catalog";
 import { addBoxToCart } from "../../lib/api/cart";
 import { ProductImage } from "../../components/shared/ProductImage";
 import { formatPriceCents } from "../../lib/utils/format";
+import { useToast } from "../../lib/toast/toast-context";
 import { colors, radii, spacing, typography } from "../../theme";
 import type { ShopStackParamList } from "../../navigation/ShopStack";
 
@@ -23,6 +24,7 @@ export function BoxDetailScreen() {
   const { params } = useRoute<Route>();
   const navigation = useNavigation<Nav>();
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const { data: box, isPending, isError } = useQuery({
     queryKey: ["catalog", "box", params.slug],
     queryFn: () => fetchBoxBySlug(params.slug),
@@ -30,7 +32,11 @@ export function BoxDetailScreen() {
 
   const addMutation = useMutation({
     mutationFn: (slug: string) => addBoxToCart(slug),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cart"] });
+      showToast(`${box?.title ?? "Box"} added to cart`);
+    },
+    onError: (err: Error) => showToast(err.message || "Couldn't add to cart", "error"),
   });
 
   if (isPending) {
@@ -67,13 +73,16 @@ export function BoxDetailScreen() {
       {box.box_type === "build_a_box" ? (
         <View style={styles.noteBox}>
           <Text style={styles.noteText}>Pick exactly {box.slot_count} snacks to build this box.</Text>
-          <Pressable style={styles.addButton} onPress={() => navigation.navigate("BuildABox")}>
+          <Pressable
+            style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
+            onPress={() => navigation.navigate("BuildABox")}
+          >
             <Text style={styles.addButtonText}>Build this box</Text>
           </Pressable>
         </View>
       ) : (
         <Pressable
-          style={styles.addButton}
+          style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
           disabled={addMutation.isPending}
           onPress={() => addMutation.mutate(box.slug)}
         >
@@ -151,6 +160,10 @@ const styles = StyleSheet.create({
     borderRadius: radii.full,
     paddingVertical: spacing.md,
     alignItems: "center",
+  },
+  addButtonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
   },
   addButtonText: {
     ...typography.sizes.base,

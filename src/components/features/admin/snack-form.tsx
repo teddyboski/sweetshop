@@ -21,7 +21,13 @@ export function SnackForm({ snack }: SnackFormProps) {
   const [name, setName] = useState(snack?.name ?? "");
   const [brand, setBrand] = useState(snack?.brand ?? "");
   const [category, setCategory] = useState(snack?.category ?? "");
-  const [priceCents, setPriceCents] = useState(snack?.price_cents ? String(snack.price_cents) : "");
+  // Priced in dollars in the UI (e.g. "4.50"), converted to cents on
+  // submit - the field used to be raw integer cents, which is how Ted hit
+  // "Invalid input: expected int, received number" typing "4.50" into it.
+  const [priceDollars, setPriceDollars] = useState(
+    snack?.price_cents ? (snack.price_cents / 100).toFixed(2) : ""
+  );
+  const [initialQuantity, setInitialQuantity] = useState("0");
   const [isSellableIndividually, setIsSellableIndividually] = useState(snack?.is_sellable_individually ?? false);
   const [isByoEligible, setIsByoEligible] = useState(snack?.is_byo_eligible ?? true);
   const [status, setStatus] = useState(snack?.status ?? "active");
@@ -35,11 +41,11 @@ export function SnackForm({ snack }: SnackFormProps) {
     setSaving(true);
 
     const payload = {
-      ...(isEditing ? {} : { slug }),
+      ...(isEditing ? {} : { slug, initialQuantity: Number(initialQuantity) || 0 }),
       name,
       brand: brand || null,
       category: category || null,
-      priceCents: priceCents ? Number(priceCents) : null,
+      priceCents: priceDollars ? Math.round(Number(priceDollars) * 100) : null,
       isSellableIndividually,
       isByoEligible,
       status,
@@ -132,9 +138,32 @@ export function SnackForm({ snack }: SnackFormProps) {
         </datalist>
       </div>
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="priceCents" className="text-sm font-medium">Price (cents)</label>
-        <Input id="priceCents" type="number" value={priceCents} onChange={(e) => setPriceCents(e.target.value)} />
+        <label htmlFor="priceDollars" className="text-sm font-medium">Price ($)</label>
+        <Input
+          id="priceDollars"
+          type="number"
+          step="0.01"
+          min="0"
+          placeholder="e.g. 4.50"
+          value={priceDollars}
+          onChange={(e) => setPriceDollars(e.target.value)}
+        />
       </div>
+      {!isEditing && (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="initialQuantity" className="text-sm font-medium">Quantity in stock</label>
+          <Input
+            id="initialQuantity"
+            type="number"
+            min="0"
+            value={initialQuantity}
+            onChange={(e) => setInitialQuantity(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            You can adjust this any time from Admin → Inventory.
+          </p>
+        </div>
+      )}
       <label className="flex items-center gap-2 text-sm">
         <input
           type="checkbox"
