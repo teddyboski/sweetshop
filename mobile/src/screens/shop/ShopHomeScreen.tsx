@@ -66,6 +66,17 @@ export function ShopHomeScreen() {
         <Ionicons name="chevron-forward" size={18} color={colors.accentForeground} />
       </Pressable>
 
+      {/* Milestone 16: same banner treatment as Drops above - Merchandise
+          is its own product family (apparel etc.), not a snack category,
+          so it doesn't belong in CategoryChips below. Milestone 18 turns
+          this whole screen into a tile menu with Merch as one destination
+          among several; this banner is the interim entry point. */}
+      <Pressable style={styles.merchBanner} onPress={() => navigation.navigate("Merch")}>
+        <Ionicons name="shirt" size={18} color={colors.foreground} />
+        <Text style={styles.merchBannerText}>Merchandise — apparel &amp; goods</Text>
+        <Ionicons name="chevron-forward" size={18} color={colors.foreground} />
+      </Pressable>
+
       <CategoryChips selected={category} onSelect={setCategory} />
 
       {hasError ? (
@@ -193,6 +204,24 @@ const styles = StyleSheet.create({
     ...typography.sizes.sm,
     fontFamily: typography.fontFamilyMedium,
     color: colors.accentForeground,
+    flex: 1,
+  },
+  merchBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  merchBannerText: {
+    ...typography.sizes.sm,
+    fontFamily: typography.fontFamilyMedium,
+    color: colors.foreground,
     flex: 1,
   },
   section: {

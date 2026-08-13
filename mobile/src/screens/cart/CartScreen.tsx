@@ -145,6 +145,9 @@ function CartLineRow({
         <Text style={styles.rowTitle} numberOfLines={2}>
           {line.name}
         </Text>
+        {line.itemType === "merch" && line.variantLabel && (
+          <Text style={styles.rowSubtitle}>{line.variantLabel}</Text>
+        )}
         {line.isBuildABox && line.snackSelections && (
           <Text style={styles.rowSubtitle} numberOfLines={2}>
             {line.snackSelections.map((s) => `${s.name} x${s.quantity}`).join(", ")}
