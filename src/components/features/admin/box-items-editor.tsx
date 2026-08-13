@@ -149,8 +149,8 @@ export function BoxItemsEditor({ boxId, items, availableSnacks }: BoxItemsEditor
       )}
 
       {pickableSnacks.length > 0 ? (
-        <form onSubmit={handleAdd} className="mt-4 flex items-end gap-2">
-          <div className="flex flex-1 flex-col gap-1.5">
+        <form onSubmit={handleAdd} className="mt-4 flex flex-wrap items-end gap-2">
+          <div className="flex min-w-[10rem] flex-1 flex-col gap-1.5">
             <label htmlFor="newSnack" className="text-sm font-medium">
               Add a snack
             </label>
@@ -158,7 +158,7 @@ export function BoxItemsEditor({ boxId, items, availableSnacks }: BoxItemsEditor
               id="newSnack"
               value={newSnackId}
               onChange={(e) => setNewSnackId(e.target.value)}
-              className="rounded-md border p-2 text-sm"
+              className="w-full rounded-md border p-2 text-sm"
             >
               {pickableSnacks.map((s) => (
                 <option key={s.id} value={s.id}>

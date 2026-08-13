@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { formatDate } from "@/lib/utils";
 import { InventoryAdjustForm } from "@/components/features/admin/inventory-adjust-form";
@@ -5,12 +6,26 @@ import { SnackStatusToggle } from "@/components/features/admin/snack-status-togg
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminInventoryPage() {
+interface AdminInventoryPageProps {
+  searchParams: Promise<{ showArchived?: string }>;
+}
+
+// Same hide-archived-by-default treatment as Admin -> Snacks/Boxes
+// (2026-08-12). Filtered client-side after the fetch rather than via an
+// embedded-resource query filter (`snacks!inner(...)` + `.eq("snacks.status", ...)`)
+// - simpler to read, and this list is small enough that it doesn't matter.
+export default async function AdminInventoryPage({ searchParams }: AdminInventoryPageProps) {
+  const { showArchived } = await searchParams;
+  const includeArchived = showArchived === "1";
+
   const admin = createAdminSupabaseClient();
-  const { data: inventory } = await admin
+  const { data: allInventory } = await admin
     .from("inventory")
     .select("snack_id, quantity_on_hand, snacks(name, status)")
     .order("quantity_on_hand", { ascending: true });
+  const inventory = includeArchived
+    ? allInventory
+    : (allInventory ?? []).filter((row) => row.snacks?.status !== "archived");
 
   const { data: events } = await admin
     .from("inventory_events")
@@ -22,8 +37,21 @@ export default async function AdminInventoryPage() {
     <div>
       <h1 className="font-heading text-2xl font-semibold">Inventory</h1>
 
-      <h2 className="mt-6 font-heading text-lg font-semibold">Stock levels</h2>
+      <div className="mt-6 flex items-center justify-between">
+        <h2 className="font-heading text-lg font-semibold">Stock levels</h2>
+        <Link
+          href={includeArchived ? "/admin/inventory" : "/admin/inventory?showArchived=1"}
+          className="text-xs text-muted-foreground underline hover:text-foreground"
+        >
+          {includeArchived ? "Hide archived" : "Show archived"}
+        </Link>
+      </div>
       <div className="mt-2 divide-y rounded-lg border">
+        {(inventory ?? []).length === 0 && (
+          <p className="p-4 text-sm text-muted-foreground">
+            {includeArchived ? "No snacks yet." : "No active snacks yet - show archived above, or add one in Snacks."}
+          </p>
+        )}
         {(inventory ?? []).map((row) => (
           <div
             key={row.snack_id}
