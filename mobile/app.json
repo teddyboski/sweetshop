@@ -13,7 +13,7 @@
     "android": {
       "package": "com.sweetshopcentral.app",
       "adaptiveIcon": {
-        "backgroundColor": "#FFFBF5",
+        "backgroundColor": "#FCEDCE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
