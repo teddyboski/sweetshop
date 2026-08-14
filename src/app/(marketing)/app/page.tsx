@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 // native build ever ships, update this one constant and redeploy - the
 // QR code / sticker itself keeps working unchanged.
 const ANDROID_APP_URL =
-  "https://expo.dev/accounts/sweetshop/projects/sweetshop-1/builds/2477f851-9c86-4f0f-8382-dc456fd65ac3";
+  "https://expo.dev/accounts/sweetshop/projects/sweetshop-1/builds/0c41cfb8-61a1-44d3-8d9f-bf7f36e81d5e";
 
 export default function GetAppPage() {
   return (
