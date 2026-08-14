@@ -8,7 +8,7 @@ export function SiteHeader() {
     <header className="border-b">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-4">
         <Link href="/" className="flex items-center gap-2">
-          <Image src="/logo-mark.svg" alt="" width={32} height={32} className="h-8 w-8" priority />
+          <Image src="/logo-mark.png" alt="" width={32} height={32} className="h-8 w-8" priority />
           <span className="text-lg font-semibold text-primary">The Sweet Shop</span>
         </Link>
         <nav className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">

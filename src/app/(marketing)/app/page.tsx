@@ -29,7 +29,7 @@ const ANDROID_APP_URL =
 export default function GetAppPage() {
   return (
     <main className="mx-auto flex max-w-2xl flex-col items-center px-4 py-16 text-center">
-      <Image src="/logo-mark.svg" alt="" width={64} height={64} className="h-16 w-16" priority />
+      <Image src="/logo-mark.png" alt="" width={64} height={64} className="h-16 w-16" priority />
       <h1 className="mt-6 font-heading text-3xl font-bold">Get The Sweet Shop</h1>
       <p className="mt-3 max-w-md text-muted-foreground">
         Shop from the Android app, or from your browser — whichever you&apos;d rather use.
