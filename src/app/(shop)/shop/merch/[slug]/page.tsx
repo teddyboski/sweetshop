@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getMerchItemBySlug } from "@/lib/supabase/queries/catalog";
-import { ProductImage } from "@/components/shared/product-image";
+import { ZoomableProductImage } from "@/components/shared/zoomable-product-image";
 import { MerchVariantPicker } from "@/components/features/merch/merch-variant-picker";
 
 export const revalidate = 60;
@@ -30,7 +30,7 @@ export default async function MerchDetailPage({ params }: MerchDetailPageProps) 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-        <ProductImage imageUrl={merchItem.imageUrl} alt={merchItem.name} className="rounded-xl" />
+        <ZoomableProductImage imageUrl={merchItem.imageUrl} alt={merchItem.name} className="rounded-xl" />
         <div>
           <h1 className="font-heading text-2xl font-semibold">{merchItem.name}</h1>
           {merchItem.category && <p className="text-sm capitalize text-muted-foreground">{merchItem.category}</p>}

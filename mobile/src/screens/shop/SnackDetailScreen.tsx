@@ -4,7 +4,7 @@ import { useRoute, type RouteProp } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { fetchSnackBySlug } from "../../lib/api/catalog";
 import { addSnackToCart } from "../../lib/api/cart";
-import { ProductImage } from "../../components/shared/ProductImage";
+import { ZoomableProductImage } from "../../components/shared/ZoomableProductImage";
 import { formatPriceCents } from "../../lib/utils/format";
 import { useToast } from "../../lib/toast/toast-context";
 import { colors, radii, spacing, typography } from "../../theme";
@@ -51,7 +51,7 @@ export function SnackDetailScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.imageWrap}>
-        <ProductImage imageUrl={snack.imageUrl} size={280} radius="xl" />
+        <ZoomableProductImage imageUrl={snack.imageUrl} size={280} radius="xl" />
       </View>
 
       <Text style={styles.title}>{snack.name}</Text>

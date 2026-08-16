@@ -8,6 +8,7 @@ type AuthContextValue = {
   /** True only during the initial session lookup on app launch. */
   isLoading: boolean;
   signInWithPassword: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 };
 
@@ -41,6 +42,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error?.message ?? null };
   }
 
+  // Milestone 23: same Supabase Auth project as the web app's signup page
+  // (src/app/(auth)/signup/page.tsx) - same signUp() call, same
+  // confirm-your-email requirement. No mobile deep-link back into the app
+  // after confirming; the user just returns and logs in, matching web's
+  // "check your email" flow rather than adding new deep-link plumbing.
+  async function signUp(email: string, password: string) {
+    const { error } = await supabase.auth.signUp({ email, password });
+    return { error: error?.message ?? null };
+  }
+
   async function signOut() {
     // Deregisters this device's push token first (Milestone 14, Product
     // Decision #5) - needs the still-valid bearer token, so it must run
@@ -50,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ session, isLoading, signInWithPassword, signOut }}>
+    <AuthContext.Provider value={{ session, isLoading, signInWithPassword, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );

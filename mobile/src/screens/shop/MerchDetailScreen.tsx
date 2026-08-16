@@ -5,7 +5,7 @@ import { useRoute, type RouteProp } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { fetchMerchItemBySlug, type MerchVariant } from "../../lib/api/catalog";
 import { addMerchToCart } from "../../lib/api/cart";
-import { ProductImage } from "../../components/shared/ProductImage";
+import { ZoomableProductImage } from "../../components/shared/ZoomableProductImage";
 import { formatPriceCents } from "../../lib/utils/format";
 import { useToast } from "../../lib/toast/toast-context";
 import { colors, radii, spacing, typography } from "../../theme";
@@ -58,7 +58,7 @@ export function MerchDetailScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.imageWrap}>
-        <ProductImage imageUrl={merchItem.imageUrl} size={280} radius="xl" />
+        <ZoomableProductImage imageUrl={merchItem.imageUrl} size={280} radius="xl" />
       </View>
 
       <Text style={styles.title}>{merchItem.name}</Text>

@@ -1,6 +1,7 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { AccountScreen } from "../screens/account/AccountScreen";
 import { LoginScreen } from "../screens/account/LoginScreen";
+import { SignUpScreen } from "../screens/account/SignUpScreen";
 import { OrdersScreen } from "../screens/account/OrdersScreen";
 import { OrderDetailScreen } from "../screens/account/OrderDetailScreen";
 import { SubscriptionsScreen } from "../screens/account/SubscriptionsScreen";
@@ -11,6 +12,7 @@ import { colors } from "../theme";
 
 export type AccountStackParamList = {
   Login: undefined;
+  SignUp: undefined;
   Account: undefined;
   Orders: undefined;
   OrderDetail: { id: string };
@@ -57,7 +59,13 @@ export function AccountStack() {
           <Stack.Screen name="Referrals" component={ReferralsScreen} options={{ title: "Refer Friends" }} />
         </>
       ) : (
-        <Stack.Screen name="Login" component={LoginScreen} options={{ title: "Sign In", headerShown: false }} />
+        <>
+          <Stack.Screen name="Login" component={LoginScreen} options={{ title: "Sign In", headerShown: false }} />
+          {/* Milestone 23: sign-up finally lives natively on mobile instead
+              of requiring the web app - registered alongside Login (not
+              inside it) since it's reached by a push, not a tab swap. */}
+          <Stack.Screen name="SignUp" component={SignUpScreen} options={{ title: "Create Account" }} />
+        </>
       )}
     </Stack.Navigator>
   );
