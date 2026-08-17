@@ -7,35 +7,53 @@ import { useAuth } from "../../lib/auth/auth-context";
 import { PasswordInput } from "../../components/shared/PasswordInput";
 import type { AccountStackParamList } from "../../navigation/AccountStack";
 
-type Nav = NativeStackNavigationProp<AccountStackParamList, "Login">;
+type Nav = NativeStackNavigationProp<AccountStackParamList, "SignUp">;
 
 /**
- * Email/password sign-in, matching the web app's existing account model
- * (same Supabase Auth project). Magic-link and forgot-password screens are
- * still deferred - real work, just not in scope here - but Milestone 23
- * adds the sign-up screen this comment used to say was deliberately
- * skipped, so people no longer have to go create an account on the web
- * app first.
+ * Milestone 23: sign-up finally lives natively on mobile - mirrors
+ * (auth)/signup/page.tsx exactly (same Supabase Auth project, same
+ * signUp() call, same "check your email" confirmation-required flow).
+ * No mobile deep-link back into the app after confirming - the
+ * confirmation link opens in the phone's browser same as any email link,
+ * and the person just returns to this app and logs in. A real deep-link
+ * return trip is a bigger, separate piece of work, not needed just to
+ * unblock sign-up existing at all.
  */
-export function LoginScreen() {
+export function SignUpScreen() {
   const navigation = useNavigation<Nav>();
-  const { signInWithPassword } = useAuth();
+  const { signUp } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   async function handleSubmit() {
     setError(null);
     setIsSubmitting(true);
-    const { error: signInError } = await signInWithPassword(email.trim(), password);
+    const { error: signUpError } = await signUp(email.trim(), password);
     setIsSubmitting(false);
-    if (signInError) setError(signInError);
+    if (signUpError) {
+      setError(signUpError);
+      return;
+    }
+    setSubmitted(true);
+  }
+
+  if (submitted) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.heading}>Check your email</Text>
+        <Text style={styles.body}>
+          We sent a confirmation link to {email}. Tap it to activate your account, then come back here and log in.
+        </Text>
+      </View>
+    );
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>Sign in to Sweet Shop</Text>
+      <Text style={styles.heading}>Create your account</Text>
 
       <TextInput
         style={styles.input}
@@ -48,8 +66,8 @@ export function LoginScreen() {
         onChangeText={setEmail}
       />
       <PasswordInput
-        placeholder="Password"
-        autoComplete="password"
+        placeholder="Password (min. 8 characters)"
+        autoComplete="password-new"
         value={password}
         onChangeText={setPassword}
       />
@@ -59,17 +77,17 @@ export function LoginScreen() {
       <TouchableOpacity
         style={[styles.button, isSubmitting && styles.buttonDisabled]}
         onPress={handleSubmit}
-        disabled={isSubmitting || !email || !password}
+        disabled={isSubmitting || !email || password.length < 8}
       >
         {isSubmitting ? (
           <ActivityIndicator color={colors.primaryForeground} />
         ) : (
-          <Text style={styles.buttonText}>Sign In</Text>
+          <Text style={styles.buttonText}>Sign Up</Text>
         )}
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => navigation.navigate("SignUp")}>
-        <Text style={styles.link}>Don&apos;t have an account? Sign up</Text>
+      <TouchableOpacity onPress={() => navigation.goBack()}>
+        <Text style={styles.link}>Already have an account? Log in</Text>
       </TouchableOpacity>
     </View>
   );
@@ -87,6 +105,11 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamilyMedium,
     color: colors.foreground,
     marginBottom: spacing["2xl"],
+    textAlign: "center",
+  },
+  body: {
+    ...typography.sizes.base,
+    color: colors.mutedForeground,
     textAlign: "center",
   },
   input: {
