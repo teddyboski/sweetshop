@@ -7,7 +7,7 @@ import { createSnackSchema } from "@/lib/validations/admin-catalog";
 // is typed unknown by the generated types, not Json-representable, and
 // would fail audit_logs.before/after otherwise (same issue as boxes).
 const SNACK_COLUMNS =
-  "id, slug, name, brand, category, tags, price_cents, is_sellable_individually, is_byo_eligible, created_at, updated_at";
+  "id, slug, name, brand, category, tags, price_cents, is_sellable_individually, is_byo_eligible, status, created_at, updated_at";
 
 export async function POST(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
       price_cents: input.priceCents ?? null,
       is_sellable_individually: input.isSellableIndividually,
       is_byo_eligible: input.isByoEligible,
+      status: input.status,
     })
     .select(SNACK_COLUMNS)
     .single();
@@ -42,13 +43,34 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data: null, error: error?.message ?? "Snack creation failed" }, { status: 500 });
   }
 
+  // Every snack needs exactly one row in `inventory` to be visible/settable
+  // on the Admin -> Inventory page at all - adjust_inventory's RPC only
+  // UPDATEs an existing row, it never creates one. Without this, a brand
+  // new snack was simply unstockable until someone ran SQL by hand.
+  const { error: inventoryError } = await admin
+    .from("inventory")
+    .insert({ snack_id: snack.id, quantity_on_hand: input.initialQuantity });
+  if (inventoryError) {
+    return NextResponse.json(
+      { data: null, error: `Snack created, but stock setup failed: ${inventoryError.message}` },
+      { status: 500 }
+    );
+  }
+  if (input.initialQuantity > 0) {
+    await admin.from("inventory_events").insert({
+      snack_id: snack.id,
+      delta: input.initialQuantity,
+      reason: "restock",
+    });
+  }
+
   await admin.from("audit_logs").insert({
     actor_id: auth.userId,
     action: "snack_create",
     entity_type: "snacks",
     entity_id: snack.id,
     before: null,
-    after: snack,
+    after: { ...snack, initial_quantity: input.initialQuantity },
   });
 
   return NextResponse.json({ data: snack, error: null }, { status: 201 });

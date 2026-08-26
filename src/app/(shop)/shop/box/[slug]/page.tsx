@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getBoxBySlug, getBoxItems } from "@/lib/supabase/queries/catalog";
 import { formatPriceCents } from "@/lib/utils";
-import { ProductImage } from "@/components/shared/product-image";
+import { ZoomableProductImage } from "@/components/shared/zoomable-product-image";
 import { AddToCartButton } from "@/components/features/cart/add-to-cart-button";
 
 export const revalidate = 60;
@@ -33,7 +33,7 @@ export default async function BoxDetailPage({ params }: BoxDetailPageProps) {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-        <ProductImage imageUrl={box.imageUrl} alt={box.title} className="rounded-xl" />
+        <ZoomableProductImage imageUrl={box.imageUrl} alt={box.title} className="rounded-xl" />
         <div>
           <h1 className="font-heading text-2xl font-semibold">{box.title}</h1>
           <p className="mt-2 text-xl font-medium">

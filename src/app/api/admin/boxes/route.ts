@@ -8,7 +8,7 @@ import { createBoxSchema } from "@/lib/validations/admin-catalog";
 // Postgres tsvector, not JSON-representable), which fails to satisfy
 // audit_logs.before/after's Json column type if selected.
 const BOX_COLUMNS =
-  "id, slug, title, description, price_cents, is_subscription, cadence, box_type, slot_count, status, created_at, updated_at, deleted_at";
+  "id, slug, title, description, price_cents, is_subscription, cadence, box_type, category, slot_count, status, created_at, updated_at, deleted_at";
 
 export async function POST(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
       is_subscription: input.isSubscription,
       cadence: input.cadence ?? null,
       box_type: input.boxType,
+      category: input.category ?? null,
       slot_count: input.slotCount ?? null,
       status: input.status,
     })

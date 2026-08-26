@@ -20,9 +20,16 @@ export function BoxForm({ box }: BoxFormProps) {
   const [slug, setSlug] = useState(box?.slug ?? "");
   const [title, setTitle] = useState(box?.title ?? "");
   const [description, setDescription] = useState(box?.description ?? "");
-  const [priceCents, setPriceCents] = useState(box ? String(box.price_cents) : "");
+  // Priced in dollars in the UI, converted to cents on submit - same fix
+  // as snack-form.tsx (2026-08-12), same bug ("expected int, received
+  // number" from typing e.g. "15.00" into a raw-cents field).
+  const [priceDollars, setPriceDollars] = useState(box ? (box.price_cents / 100).toFixed(2) : "");
   const [isSubscription, setIsSubscription] = useState(box?.is_subscription ?? false);
   const [boxType, setBoxType] = useState(box?.box_type ?? "curated");
+  // Milestone 18: which dedicated storefront page/nav destination this box
+  // belongs on - orthogonal to boxType. Not applicable to build_a_box,
+  // since that flow is reached directly, not via a category listing.
+  const [category, setCategory] = useState(box?.category ?? "");
   const [slotCount, setSlotCount] = useState(box?.slot_count ? String(box.slot_count) : "");
   const [status, setStatus] = useState(box?.status ?? "draft");
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -38,9 +45,10 @@ export function BoxForm({ box }: BoxFormProps) {
       ...(isEditing ? {} : { slug }),
       title,
       description: description || null,
-      priceCents: Number(priceCents),
+      priceCents: Math.round(Number(priceDollars) * 100),
       isSubscription,
       boxType,
+      category: boxType === "build_a_box" ? null : category || null,
       slotCount: boxType === "build_a_box" ? Number(slotCount) : null,
       status,
     };
@@ -96,12 +104,15 @@ export function BoxForm({ box }: BoxFormProps) {
         <Input id="description" value={description ?? ""} onChange={(e) => setDescription(e.target.value)} />
       </div>
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="priceCents" className="text-sm font-medium">Price (cents)</label>
+        <label htmlFor="priceDollars" className="text-sm font-medium">Price ($)</label>
         <Input
-          id="priceCents"
+          id="priceDollars"
           type="number"
-          value={priceCents}
-          onChange={(e) => setPriceCents(e.target.value)}
+          step="0.01"
+          min="0"
+          placeholder="e.g. 15.00"
+          value={priceDollars}
+          onChange={(e) => setPriceDollars(e.target.value)}
           required
         />
       </div>
@@ -121,6 +132,28 @@ export function BoxForm({ box }: BoxFormProps) {
         <div className="flex flex-col gap-1.5">
           <label htmlFor="slotCount" className="text-sm font-medium">Slot count</label>
           <Input id="slotCount" type="number" value={slotCount} onChange={(e) => setSlotCount(e.target.value)} required />
+        </div>
+      )}
+      {boxType !== "build_a_box" && (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="category" className="text-sm font-medium">
+            Storefront category
+          </label>
+          <select
+            id="category"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="rounded-md border p-2 text-sm"
+          >
+            <option value="">— None yet —</option>
+            <option value="snack_box">Snack Box</option>
+            <option value="candy_box">Candy Box</option>
+            <option value="mystery_box">Mystery Box</option>
+            <option value="passport_box">Passport Box</option>
+          </select>
+          <p className="text-xs text-muted-foreground">
+            Which shop page this box appears on. Leave unset to keep it off the new category pages for now.
+          </p>
         </div>
       )}
       <div className="flex flex-col gap-1.5">

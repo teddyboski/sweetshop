@@ -2,7 +2,7 @@ export const SNACK_ONLY_FREE_SHIPPING_THRESHOLD_CENTS = 2500;
 export const SNACK_ONLY_SHIPPING_FEE_CENTS = 500;
 
 export interface CartLineForTotal {
-  itemType: "box" | "snack";
+  itemType: "box" | "snack" | "merch";
   unitPriceCents: number;
   quantity: number;
 }
@@ -21,7 +21,11 @@ export interface CartTotal {
  * approved 2026-07-20): a cart with zero box lines (curated, mystery, or
  * build_a_box - build_a_box lines are inserted as item_type='box', see the
  * cart_items schema) and a subtotal under $25 gets a flat $5 shipping fee.
- * Any box present, or a snack-only subtotal of $25+, ships free.
+ * Any box present, or a snack/merch subtotal of $25+, ships free.
+ *
+ * Milestone 16: merch lines fall on the same side of this rule as snacks
+ * (only a box's presence waives the threshold) - unchanged logic, just a
+ * widened itemType so `hasBox` still means exactly "box", not "non-snack".
  */
 export function calculateCartTotal(lines: CartLineForTotal[]): CartTotal {
   const subtotalCents = lines.reduce((sum, line) => sum + line.unitPriceCents * line.quantity, 0);

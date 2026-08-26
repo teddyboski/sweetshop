@@ -11,7 +11,7 @@ type BoxUpdate = Database["public"]["Tables"]["boxes"]["Update"];
 // Postgres tsvector, not JSON-representable), which fails to satisfy
 // audit_logs.before/after's Json column type if selected.
 const BOX_COLUMNS =
-  "id, slug, title, description, price_cents, is_subscription, cadence, box_type, slot_count, status, created_at, updated_at, deleted_at";
+  "id, slug, title, description, price_cents, is_subscription, cadence, box_type, category, slot_count, status, created_at, updated_at, deleted_at";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin(request);
@@ -40,6 +40,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (input.isSubscription !== undefined) updates.is_subscription = input.isSubscription;
   if (input.cadence !== undefined) updates.cadence = input.cadence;
   if (input.boxType !== undefined) updates.box_type = input.boxType;
+  if (input.category !== undefined) updates.category = input.category;
   if (input.slotCount !== undefined) updates.slot_count = input.slotCount;
   if (input.status !== undefined) updates.status = input.status;
 

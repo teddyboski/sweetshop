@@ -25,7 +25,9 @@ export async function POST(request: NextRequest) {
       ? await prepareBuildABoxItem(admin, parsed.data)
       : parsed.data.itemType === "box"
         ? await prepareBoxItem(admin, parsed.data)
-        : await prepareSnackItem(admin, parsed.data);
+        : parsed.data.itemType === "snack"
+          ? await prepareSnackItem(admin, parsed.data)
+          : await prepareMerchItem(admin, parsed.data);
 
   if (itemResult.error) {
     return NextResponse.json({ data: null, error: { message: itemResult.error } }, { status: itemResult.status! });
@@ -37,13 +39,20 @@ export async function POST(request: NextRequest) {
   }
   const cartId = cartResult.cartId!;
 
+  // Derived from which id PreparedItem actually populated, not re-read
+  // from the request body - merch is checked first since a merch line
+  // carries both merchItemId and merchVariantId, snack next, box last.
+  const itemType = itemResult.merchVariantId ? "merch" : itemResult.snackId ? "snack" : "box";
+
   const { data: cartItem, error: cartItemError } = await admin
     .from("cart_items")
     .insert({
       cart_id: cartId,
-      item_type: itemResult.snackId ? "snack" : "box",
+      item_type: itemType,
       box_id: itemResult.boxId ?? null,
       snack_id: itemResult.snackId ?? null,
+      merch_item_id: itemResult.merchItemId ?? null,
+      merch_variant_id: itemResult.merchVariantId ?? null,
       quantity: itemResult.quantity!,
     })
     .select("id")
@@ -67,7 +76,14 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const response = NextResponse.json({ data: { cartItemId: cartItem.id }, error: null }, { status: 201 });
+  // anonymousCartId is echoed in the body (not just the Set-Cookie below)
+  // so a mobile client - which can't rely on cookie-jar persistence the
+  // way a browser can - has an explicit value to save in SecureStore and
+  // replay via the X-Anonymous-Cart-Id header on every later cart call.
+  const response = NextResponse.json(
+    { data: { cartItemId: cartItem.id, anonymousCartId: cartResult.anonymousCartId ?? null }, error: null },
+    { status: 201 }
+  );
 
   if (cartResult.newAnonymousCookie) {
     response.cookies.set(ANONYMOUS_CART_COOKIE, cartResult.newAnonymousCookie, {
@@ -85,6 +101,8 @@ export async function POST(request: NextRequest) {
 interface PreparedItem {
   boxId?: string;
   snackId?: string;
+  merchItemId?: string;
+  merchVariantId?: string;
   quantity?: number;
   snackSelections?: Array<{ snackId: string; quantity: number }>;
   error?: string;
@@ -120,11 +138,15 @@ async function prepareBuildABoxItem(
   const snackIds = data.snacks.map((s) => s.snackId);
   const { data: snacks, error: snacksError } = await admin
     .from("snacks")
-    .select("id, is_byo_eligible")
+    .select("id, is_byo_eligible, status")
     .in("id", snackIds);
 
   if (snacksError) return { error: snacksError.message, status: 500 };
-  if (!snacks || snacks.length !== snackIds.length || snacks.some((s) => !s.is_byo_eligible)) {
+  if (
+    !snacks ||
+    snacks.length !== snackIds.length ||
+    snacks.some((s) => !s.is_byo_eligible || s.status !== "active")
+  ) {
     return { error: "One or more snacks are not eligible for Build-a-Box", status: 400 };
   }
 
@@ -153,12 +175,32 @@ async function prepareSnackItem(
 ): Promise<PreparedItem> {
   const { data: snack, error } = await admin
     .from("snacks")
-    .select("id, is_sellable_individually")
+    .select("id, is_sellable_individually, status")
     .eq("id", data.snackId)
     .maybeSingle();
 
   if (error) return { error: error.message, status: 500 };
-  if (!snack || !snack.is_sellable_individually) return { error: "Snack not found", status: 404 };
+  if (!snack || !snack.is_sellable_individually || snack.status !== "active") {
+    return { error: "Snack not found", status: 404 };
+  }
 
   return { snackId: snack.id, quantity: data.quantity };
+}
+
+async function prepareMerchItem(
+  admin: ReturnType<typeof createAdminSupabaseClient>,
+  data: Extract<import("@/lib/validations/cart").AddToCartInput, { itemType: "merch" }>
+): Promise<PreparedItem> {
+  const { data: variant, error } = await admin
+    .from("merch_variants")
+    .select("id, merch_item_id, merch_items(status)")
+    .eq("id", data.merchVariantId)
+    .maybeSingle();
+
+  if (error) return { error: error.message, status: 500 };
+  if (!variant || variant.merch_items?.status !== "active") {
+    return { error: "Item not found", status: 404 };
+  }
+
+  return { merchItemId: variant.merch_item_id, merchVariantId: variant.id, quantity: data.quantity };
 }

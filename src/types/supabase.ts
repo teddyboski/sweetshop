@@ -98,6 +98,7 @@ export type Database = {
         Row: {
           box_type: string
           cadence: string | null
+          category: string | null
           created_at: string
           deleted_at: string | null
           description: string | null
@@ -114,6 +115,7 @@ export type Database = {
         Insert: {
           box_type?: string
           cadence?: string | null
+          category?: string | null
           created_at?: string
           deleted_at?: string | null
           description?: string | null
@@ -130,6 +132,7 @@ export type Database = {
         Update: {
           box_type?: string
           cadence?: string | null
+          category?: string | null
           created_at?: string
           deleted_at?: string | null
           description?: string | null
@@ -191,6 +194,8 @@ export type Database = {
           created_at: string
           id: string
           item_type: string
+          merch_item_id: string | null
+          merch_variant_id: string | null
           quantity: number
           snack_id: string | null
           updated_at: string
@@ -201,6 +206,8 @@ export type Database = {
           created_at?: string
           id?: string
           item_type: string
+          merch_item_id?: string | null
+          merch_variant_id?: string | null
           quantity?: number
           snack_id?: string | null
           updated_at?: string
@@ -211,6 +218,8 @@ export type Database = {
           created_at?: string
           id?: string
           item_type?: string
+          merch_item_id?: string | null
+          merch_variant_id?: string | null
           quantity?: number
           snack_id?: string | null
           updated_at?: string
@@ -228,6 +237,20 @@ export type Database = {
             columns: ["cart_id"]
             isOneToOne: false
             referencedRelation: "carts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cart_items_merch_item_id_fkey"
+            columns: ["merch_item_id"]
+            isOneToOne: false
+            referencedRelation: "merch_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cart_items_merch_variant_id_fkey"
+            columns: ["merch_variant_id"]
+            isOneToOne: false
+            referencedRelation: "merch_variants"
             referencedColumns: ["id"]
           },
           {
@@ -415,6 +438,7 @@ export type Database = {
           created_at: string
           ends_at: string
           id: string
+          notified_at: string | null
           quantity_limit: number
           starts_at: string
           units_sold: number
@@ -425,6 +449,7 @@ export type Database = {
           created_at?: string
           ends_at: string
           id?: string
+          notified_at?: string | null
           quantity_limit: number
           starts_at: string
           units_sold?: number
@@ -435,6 +460,7 @@ export type Database = {
           created_at?: string
           ends_at?: string
           id?: string
+          notified_at?: string | null
           quantity_limit?: number
           starts_at?: string
           units_sold?: number
@@ -562,6 +588,160 @@ export type Database = {
           },
         ]
       }
+      merch_inventory: {
+        Row: {
+          id: string
+          merch_variant_id: string
+          quantity_on_hand: number
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          merch_variant_id: string
+          quantity_on_hand?: number
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          merch_variant_id?: string
+          quantity_on_hand?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merch_inventory_merch_variant_id_fkey"
+            columns: ["merch_variant_id"]
+            isOneToOne: true
+            referencedRelation: "merch_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      merch_inventory_events: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          delta: number
+          id: string
+          merch_variant_id: string
+          reason: string
+          reference_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          delta: number
+          id?: string
+          merch_variant_id: string
+          reason: string
+          reference_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          delta?: number
+          id?: string
+          merch_variant_id?: string
+          reason?: string
+          reference_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merch_inventory_events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merch_inventory_events_merch_variant_id_fkey"
+            columns: ["merch_variant_id"]
+            isOneToOne: false
+            referencedRelation: "merch_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      merch_items: {
+        Row: {
+          category: string | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          price_cents: number
+          slug: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          price_cents: number
+          slug: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          price_cents?: number
+          slug?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      merch_variants: {
+        Row: {
+          color: string | null
+          created_at: string
+          id: string
+          merch_item_id: string
+          price_cents_override: number | null
+          size: string | null
+          sku: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          merch_item_id: string
+          price_cents_override?: number | null
+          size?: string | null
+          sku?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          id?: string
+          merch_item_id?: string
+          price_cents_override?: number | null
+          size?: string | null
+          sku?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merch_variants_merch_item_id_fkey"
+            columns: ["merch_item_id"]
+            isOneToOne: false
+            referencedRelation: "merch_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_item_snacks: {
         Row: {
           created_at: string
@@ -607,6 +787,8 @@ export type Database = {
           created_at: string
           id: string
           item_type: string
+          merch_item_id: string | null
+          merch_variant_id: string | null
           order_id: string
           quantity: number
           snack_id: string | null
@@ -617,6 +799,8 @@ export type Database = {
           created_at?: string
           id?: string
           item_type: string
+          merch_item_id?: string | null
+          merch_variant_id?: string | null
           order_id: string
           quantity?: number
           snack_id?: string | null
@@ -627,6 +811,8 @@ export type Database = {
           created_at?: string
           id?: string
           item_type?: string
+          merch_item_id?: string | null
+          merch_variant_id?: string | null
           order_id?: string
           quantity?: number
           snack_id?: string | null
@@ -638,6 +824,20 @@ export type Database = {
             columns: ["box_id"]
             isOneToOne: false
             referencedRelation: "boxes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_merch_item_id_fkey"
+            columns: ["merch_item_id"]
+            isOneToOne: false
+            referencedRelation: "merch_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_merch_variant_id_fkey"
+            columns: ["merch_variant_id"]
+            isOneToOne: false
+            referencedRelation: "merch_variants"
             referencedColumns: ["id"]
           },
           {
@@ -720,6 +920,7 @@ export type Database = {
           id: string
           image_url: string
           is_primary: boolean
+          merch_item_id: string | null
           snack_id: string | null
           sort_order: number
         }
@@ -730,6 +931,7 @@ export type Database = {
           id?: string
           image_url: string
           is_primary?: boolean
+          merch_item_id?: string | null
           snack_id?: string | null
           sort_order?: number
         }
@@ -740,6 +942,7 @@ export type Database = {
           id?: string
           image_url?: string
           is_primary?: boolean
+          merch_item_id?: string | null
           snack_id?: string | null
           sort_order?: number
         }
@@ -749,6 +952,13 @@ export type Database = {
             columns: ["box_id"]
             isOneToOne: false
             referencedRelation: "boxes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_images_merch_item_id_fkey"
+            columns: ["merch_item_id"]
+            isOneToOne: false
+            referencedRelation: "merch_items"
             referencedColumns: ["id"]
           },
           {
@@ -967,6 +1177,7 @@ export type Database = {
           price_cents: number | null
           search_vector: unknown
           slug: string
+          status: string
           tags: string[]
           updated_at: string
         }
@@ -982,6 +1193,7 @@ export type Database = {
           price_cents?: number | null
           search_vector?: unknown
           slug: string
+          status?: string
           tags?: string[]
           updated_at?: string
         }
@@ -997,10 +1209,40 @@ export type Database = {
           price_cents?: number | null
           search_vector?: unknown
           slug?: string
+          status?: string
           tags?: string[]
           updated_at?: string
         }
         Relationships: []
+      }
+      push_tokens: {
+        Row: {
+          created_at: string
+          expo_push_token: string
+          platform: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expo_push_token: string
+          platform: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expo_push_token?: string
+          platform?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       stripe_events: {
         Row: {
@@ -1105,6 +1347,15 @@ export type Database = {
           p_reason: string
           p_reference_id?: string | null
           p_snack_id: string
+        }
+        Returns: undefined
+      }
+      adjust_merch_inventory: {
+        Args: {
+          p_delta: number
+          p_merch_variant_id: string
+          p_reason: string
+          p_reference_id?: string | null
         }
         Returns: undefined
       }

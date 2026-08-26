@@ -40,7 +40,7 @@ export default function Privacy() {
         <p>
           You can request deletion of your Sweet Shop account and personal
           data at any time by emailing{" "}
-          
+          <a
             href="mailto:Manager@middlemanmerchants.com?subject=Account%20Deletion%20Request"
             className="underline"
           >
