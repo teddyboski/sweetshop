@@ -109,10 +109,10 @@ export function BuildABoxScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Build Your Own Box</Text>
       <Text style={styles.subtitle}>
-        Pick a size, then tell us your preferences — we will hand-pack it fresh.
+        Pick a size, then tell us your preferences ï¿½ we will hand-pack it fresh.
       </Text>
 
-      <Text style={styles.sectionTitle}>Step 1 — Choose a size</Text>
+      <Text style={styles.sectionTitle}>Step 1 ï¿½ Choose a size</Text>
       <View style={styles.boxRow}>
         {buildABoxes.map((box) => {
           const selected = selectedBox?.id === box.id;
@@ -126,7 +126,7 @@ export function BuildABoxScreen() {
                 {box.title}
               </Text>
               <Text style={styles.boxMeta}>
-                {formatPriceCents(box.price_cents)} · {box.slot_count} items
+                {formatPriceCents(box.price_cents)} ï¿½ {box.slot_count} items
               </Text>
             </Pressable>
           );
@@ -135,7 +135,7 @@ export function BuildABoxScreen() {
 
       {selectedBox && (
         <>
-          <Text style={styles.sectionTitle}>Step 2 — Snack types</Text>
+          <Text style={styles.sectionTitle}>Step 2 ï¿½ Snack types</Text>
           <Text style={styles.sectionHint}>Check everything you would like included.</Text>
           <View style={styles.checkGrid}>
             {SNACK_TYPES.map(({ key, label }) => {
@@ -157,7 +157,7 @@ export function BuildABoxScreen() {
             })}
           </View>
 
-          <Text style={styles.sectionTitle}>Step 3 — Flavor preferences</Text>
+          <Text style={styles.sectionTitle}>Step 3 ï¿½ Flavor preferences</Text>
           <Text style={styles.sectionHint}>Check all the flavors you enjoy.</Text>
           <View style={styles.checkGrid}>
             {FLAVORS.map(({ key, label }) => {
@@ -185,7 +185,7 @@ export function BuildABoxScreen() {
             onPress={() => submitMutation.mutate()}
           >
             <Text style={styles.submitBtnText}>
-              {submitMutation.isPending ? "Adding..." : `Add to Cart — ${formatPriceCents(selectedBox.price_cents)}`}
+              {submitMutation.isPending ? "Adding..." : `Add to Cart ï¿½ ${formatPriceCents(selectedBox.price_cents)}`}
             </Text>
           </Pressable>
         </>
@@ -198,10 +198,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing[4], paddingBottom: spacing[12] },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  title: { ...typography.heading, fontSize: 22, color: colors.foreground },
+  title: { ...typography.heading, fontSize: 24, color: colors.foreground },
   subtitle: { ...typography.body, color: colors.mutedForeground, marginTop: spacing[1], marginBottom: spacing[2] },
-  sectionTitle: { ...typography.heading, fontSize: 16, color: colors.foreground, marginTop: spacing[6], marginBottom: spacing[1] },
-  sectionHint: { ...typography.body, fontSize: 13, color: colors.mutedForeground, marginBottom: spacing[3] },
+  sectionTitle: { ...typography.heading, fontSize: 18, color: colors.foreground, marginTop: spacing[6], marginBottom: spacing[1] },
+  sectionHint: { ...typography.body, fontSize: 14, color: colors.mutedForeground, marginBottom: spacing[3] },
   muted: { color: colors.mutedForeground },
   boxRow: { flexDirection: "row", gap: spacing[3], flexWrap: "wrap" },
   boxCard: { flex: 1, minWidth: 100, borderWidth: 1, borderColor: colors.border, borderRadius: radii.lg, padding: spacing[3], backgroundColor: colors.card },
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
   checkbox: { width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   checkboxChecked: { backgroundColor: colors.primary, borderColor: colors.primary },
   checkmark: { color: "#fff", fontSize: 11, fontWeight: "700" },
-  checkLabel: { ...typography.body, fontSize: 13, color: colors.foreground },
+  checkLabel: { ...typography.body, fontSize: 14, color: colors.foreground },
   checkLabelSelected: { fontWeight: "600", color: colors.primary },
   submitBtn: { marginTop: spacing[8], backgroundColor: colors.primary, borderRadius: radii.md, paddingVertical: spacing[4], alignItems: "center" },
   submitBtnDisabled: { opacity: 0.5 },

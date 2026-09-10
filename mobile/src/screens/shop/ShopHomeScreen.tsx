@@ -46,7 +46,7 @@ const TILES: Tile[] = [
   { kind: "shop", screen: "CandyBoxes", icon: "gift-outline", label: "Candy Boxes", description: "A curated candy mix" },
   { kind: "shop", screen: "MysteryBox", icon: "help-circle-outline", label: "Mystery Box", description: "Surprise, rotating contents" },
   { kind: "shop", screen: "BuildABox", icon: "construct-outline", label: "Build-a-Box", description: "Pick your own snacks" },
-  { kind: "shop", screen: "Snacks", icon: "fast-food-outline", label: "Snacks", description: "Chips, candy, cookies & cakes" },
+
   { kind: "shop", screen: "HouseSnacks", icon: "home-outline", label: "House Snacks", description: "Made in-house by us" },
   { kind: "shop", screen: "Merch", icon: "shirt-outline", label: "Merchandise", description: "Apparel & goods, made in-house" },
   { kind: "account", screen: "Rewards", icon: "star-outline", label: "Rewards", description: "Track points & perks" },
