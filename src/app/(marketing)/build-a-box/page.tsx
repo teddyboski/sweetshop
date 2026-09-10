@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
@@ -12,12 +12,12 @@ export default function BuildABox() {
     <main className="mx-auto max-w-3xl px-4 py-16">
       <h1 className="text-3xl font-bold">Three sizes. Your call on what&apos;s inside.</h1>
       <p className="mt-4 text-lg text-muted-foreground">
-        Small (8 items) · Medium (15 items) · Large (25 items). Tell us your
+        Small (12 items) · Medium (20 items) · Large (30 items). Tell us your
         preferences, we&apos;ll pack it fresh — perfect for picky snackers and
         even better as a gift.
       </p>
       <p className="mt-2 font-medium">
-        Small $15 · Medium $25 · Large $35 — one flat price per size, no
+        Small $14.99 · Medium $24.99 · Large $34.99 — one flat price per size, no
         surprises at checkout.
       </p>
       <Link

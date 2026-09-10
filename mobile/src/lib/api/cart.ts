@@ -128,12 +128,12 @@ export async function addMerchToCart(merchVariantId: string, quantity = 1): Prom
 
 export async function addBuildABoxToCart(
   boxSlug: string,
-  snacks: Array<{ snackId: string; quantity: number }>
+  preferences: { snackTypes: string[]; flavors: string[] }
 ): Promise<AddItemResult> {
   const response = await cartFetch("/api/cart/items", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ itemType: "build_a_box", boxSlug, snacks }),
+    body: JSON.stringify({ itemType: "build_a_box", boxSlug, preferences }),
   });
   const data = await unwrapEnvelope<AddItemResult>(response);
   await persistAnonymousId(data);
@@ -153,3 +153,4 @@ export async function removeCartItem(id: string): Promise<void> {
   const response = await cartFetch(`/api/cart/items/${encodeURIComponent(id)}`, { method: "DELETE" });
   await unwrapEnvelope(response);
 }
+

@@ -1,47 +1,32 @@
-import { create } from "zustand";
+﻿import { create } from "zustand";
+import type { SnackType, Flavor } from "@/lib/validations/cart";
 
 export interface BuildABoxState {
-  slotCount: number;
-  selections: Record<string, number>;
-  totalPicked: () => number;
-  addSnack: (snackId: string) => void;
-  removeSnack: (snackId: string) => void;
-  setSlotCount: (slotCount: number) => void;
+  selectedSnackTypes: Set<SnackType>;
+  selectedFlavors: Set<Flavor>;
+  toggleSnackType: (type: SnackType) => void;
+  toggleFlavor: (flavor: Flavor) => void;
   reset: () => void;
 }
 
-export const useBuildABoxStore = create<BuildABoxState>((set, get) => ({
-  slotCount: 0,
-  selections: {},
+export const useBuildABoxStore = create<BuildABoxState>((set) => ({
+  selectedSnackTypes: new Set(),
+  selectedFlavors: new Set(),
 
-  totalPicked: () => Object.values(get().selections).reduce((sum, qty) => sum + qty, 0),
+  toggleSnackType: (type) =>
+    set((state) => {
+      const next = new Set(state.selectedSnackTypes);
+      next.has(type) ? next.delete(type) : next.add(type);
+      return { selectedSnackTypes: next };
+    }),
 
-  addSnack: (snackId) => {
-    const { selections, slotCount } = get();
-    const currentTotal = Object.values(selections).reduce((sum, qty) => sum + qty, 0);
-    if (currentTotal >= slotCount) return;
+  toggleFlavor: (flavor) =>
+    set((state) => {
+      const next = new Set(state.selectedFlavors);
+      next.has(flavor) ? next.delete(flavor) : next.add(flavor);
+      return { selectedFlavors: next };
+    }),
 
-    set({
-      selections: {
-        ...selections,
-        [snackId]: (selections[snackId] ?? 0) + 1,
-      },
-    });
-  },
-
-  removeSnack: (snackId) => {
-    const { selections } = get();
-    const current = selections[snackId] ?? 0;
-    if (current <= 1) {
-      const rest = { ...selections };
-      delete rest[snackId];
-      set({ selections: rest });
-      return;
-    }
-    set({ selections: { ...selections, [snackId]: current - 1 } });
-  },
-
-  setSlotCount: (slotCount) => set({ slotCount }),
-
-  reset: () => set({ selections: {} }),
+  reset: () =>
+    set({ selectedSnackTypes: new Set(), selectedFlavors: new Set() }),
 }));

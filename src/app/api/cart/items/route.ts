@@ -39,9 +39,6 @@ export async function POST(request: NextRequest) {
   }
   const cartId = cartResult.cartId!;
 
-  // Derived from which id PreparedItem actually populated, not re-read
-  // from the request body - merch is checked first since a merch line
-  // carries both merchItemId and merchVariantId, snack next, box last.
   const itemType = itemResult.merchVariantId ? "merch" : itemResult.snackId ? "snack" : "box";
 
   const { data: cartItem, error: cartItemError } = await admin
@@ -54,6 +51,8 @@ export async function POST(request: NextRequest) {
       merch_item_id: itemResult.merchItemId ?? null,
       merch_variant_id: itemResult.merchVariantId ?? null,
       quantity: itemResult.quantity!,
+      // @ts-expect-error byo_preferences added by migration, types regenerate after supabase db push
+      byo_preferences: itemResult.byoPreferences ?? null,
     })
     .select("id")
     .single();
@@ -62,24 +61,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data: null, error: { message: "Could not add item to cart" } }, { status: 500 });
   }
 
-  if (itemResult.snackSelections) {
-    const { error: snackRowsError } = await admin.from("cart_item_snacks").insert(
-      itemResult.snackSelections.map((s) => ({
-        cart_item_id: cartItem.id,
-        snack_id: s.snackId,
-        quantity: s.quantity,
-      }))
-    );
-
-    if (snackRowsError) {
-      return NextResponse.json({ data: null, error: { message: "Could not save snack selection" } }, { status: 500 });
-    }
-  }
-
-  // anonymousCartId is echoed in the body (not just the Set-Cookie below)
-  // so a mobile client - which can't rely on cookie-jar persistence the
-  // way a browser can - has an explicit value to save in SecureStore and
-  // replay via the X-Anonymous-Cart-Id header on every later cart call.
   const response = NextResponse.json(
     { data: { cartItemId: cartItem.id, anonymousCartId: cartResult.anonymousCartId ?? null }, error: null },
     { status: 201 }
@@ -104,7 +85,7 @@ interface PreparedItem {
   merchItemId?: string;
   merchVariantId?: string;
   quantity?: number;
-  snackSelections?: Array<{ snackId: string; quantity: number }>;
+  byoPreferences?: { snackTypes: string[]; flavors: string[] };
   error?: string;
   status?: number;
 }
@@ -113,11 +94,9 @@ async function prepareBuildABoxItem(
   admin: ReturnType<typeof createAdminSupabaseClient>,
   data: Extract<import("@/lib/validations/cart").AddToCartInput, { itemType: "build_a_box" }>
 ): Promise<PreparedItem> {
-  // Never trust a client-supplied slot count or box_type. See Milestone 4
-  // plan, Product Decision #4.
   const { data: box, error: boxError } = await admin
     .from("boxes")
-    .select("id, box_type, slot_count, status")
+    .select("id, box_type, status")
     .eq("slug", data.boxSlug)
     .maybeSingle();
 
@@ -127,30 +106,14 @@ async function prepareBuildABoxItem(
     return { error: "This box does not accept a custom snack selection", status: 400 };
   }
 
-  const submittedTotal = data.snacks.reduce((sum, s) => sum + s.quantity, 0);
-  if (submittedTotal !== box.slot_count) {
-    return {
-      error: `This box requires exactly ${box.slot_count} items, received ${submittedTotal}`,
-      status: 400,
-    };
-  }
-
-  const snackIds = data.snacks.map((s) => s.snackId);
-  const { data: snacks, error: snacksError } = await admin
-    .from("snacks")
-    .select("id, is_byo_eligible, status")
-    .in("id", snackIds);
-
-  if (snacksError) return { error: snacksError.message, status: 500 };
-  if (
-    !snacks ||
-    snacks.length !== snackIds.length ||
-    snacks.some((s) => !s.is_byo_eligible || s.status !== "active")
-  ) {
-    return { error: "One or more snacks are not eligible for Build-a-Box", status: 400 };
-  }
-
-  return { boxId: box.id, quantity: 1, snackSelections: data.snacks };
+  return {
+    boxId: box.id,
+    quantity: 1,
+    byoPreferences: {
+      snackTypes: data.preferences.snackTypes,
+      flavors: data.preferences.flavors,
+    },
+  };
 }
 
 async function prepareBoxItem(

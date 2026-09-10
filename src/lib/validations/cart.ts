@@ -1,20 +1,15 @@
-import { z } from "zod";
+﻿import { z } from "zod";
+
+const SNACK_TYPES = ["chips", "candy", "cookies", "cakes", "crackers", "nuts", "gummies", "chocolate"] as const;
+const FLAVORS = ["sweet", "salty", "spicy", "sour", "savory", "fruity", "chocolatey"] as const;
 
 const buildABoxItemSchema = z.object({
   itemType: z.literal("build_a_box"),
   boxSlug: z.string().trim().min(1),
-  snacks: z
-    .array(
-      z.object({
-        snackId: z.string().uuid(),
-        quantity: z.number().int().min(1),
-      })
-    )
-    .min(1)
-    .refine(
-      (snacks) => new Set(snacks.map((s) => s.snackId)).size === snacks.length,
-      { message: "Duplicate snackId entries are not allowed - combine into one quantity instead" }
-    ),
+  preferences: z.object({
+    snackTypes: z.array(z.enum(SNACK_TYPES)).min(1, "Select at least one snack type"),
+    flavors: z.array(z.enum(FLAVORS)).min(1, "Select at least one flavor preference"),
+  }),
 });
 
 const boxItemSchema = z.object({
@@ -29,11 +24,6 @@ const snackItemSchema = z.object({
   quantity: z.number().int().min(1),
 });
 
-// Only merchVariantId is submitted (not merchItemId) - the variant is what
-// the customer actually picked (a size/color), and it always resolves back
-// to its own parent merch_item_id server-side, same trust model as every
-// other item type here (never derive product identity from more client
-// input than the one id needed to look it up).
 const merchItemSchema = z.object({
   itemType: z.literal("merch"),
   merchVariantId: z.string().uuid(),
@@ -46,8 +36,8 @@ export const addToCartSchema = z.discriminatedUnion("itemType", [
   snackItemSchema,
   merchItemSchema,
 ]);
-export type AddToCartInput = z.infer<typeof addToCartSchema>;
 
-/** @deprecated kept as a type alias for the Milestone 4 shape; use addToCartSchema */
-export const addBuildABoxToCartSchema = buildABoxItemSchema;
-export type AddBuildABoxToCartInput = z.infer<typeof buildABoxItemSchema>;
+export type AddToCartInput = z.infer<typeof addToCartSchema>;
+export type SnackType = typeof SNACK_TYPES[number];
+export type Flavor = typeof FLAVORS[number];
+export { SNACK_TYPES, FLAVORS };

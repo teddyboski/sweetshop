@@ -24,10 +24,10 @@ export default async function AdminOrderDetailPage({ params }: AdminOrderDetailP
 
   if (!order) notFound();
 
-  const { data: items } = await admin
+  const { data: items } = (await admin
     .from("order_items")
-    .select("id, item_type, quantity, unit_price_cents, boxes(title), snacks(name)")
-    .eq("order_id", id);
+    .select("id, item_type, quantity, unit_price_cents, byo_preferences, boxes(title, box_type), snacks(name)")
+    .eq("order_id", id)) as any;
 
   return (
     <div className="max-w-2xl">
@@ -40,16 +40,40 @@ export default async function AdminOrderDetailPage({ params }: AdminOrderDetailP
         <div>
           <h2 className="font-heading text-lg font-semibold">Line items</h2>
           <div className="mt-2 divide-y rounded-lg border">
-            {(items ?? []).map((item) => (
-              <div key={item.id} className="flex items-center justify-between p-3 text-sm">
-                <span>
-                  {item.quantity}x {item.boxes?.title ?? item.snacks?.name ?? item.item_type}
-                </span>
-                <span>{formatPriceCents(item.unit_price_cents * item.quantity)}</span>
-              </div>
-            ))}
+            {(items ?? []).map((item: any) => {
+              const isByo = item.boxes?.box_type === "build_a_box";
+              const prefs = item.byo_preferences as {
+                snackTypes?: string[];
+                flavors?: string[];
+              } | null;
+
+              return (
+                <div key={item.id} className="p-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span>
+                      {item.quantity}x {item.boxes?.title ?? item.snacks?.name ?? item.item_type}
+                    </span>
+                    <span>{formatPriceCents(item.unit_price_cents * item.quantity)}</span>
+                  </div>
+                  {isByo && prefs && (
+                    <div className="mt-2 space-y-1 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                      <p>
+                        <span className="font-medium text-foreground">Snack types: </span>
+                        {prefs.snackTypes?.join(", ") ?? "�&"}
+                      </p>
+                      <p>
+                        <span className="font-medium text-foreground">Flavors: </span>
+                        {prefs.flavors?.join(", ") ?? "�&"}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-          <p className="mt-2 text-right text-sm font-medium">Total: {formatPriceCents(order.total_amount_cents)}</p>
+          <p className="mt-2 text-right text-sm font-medium">
+            Total: {formatPriceCents(order.total_amount_cents)}
+          </p>
         </div>
 
         <div>

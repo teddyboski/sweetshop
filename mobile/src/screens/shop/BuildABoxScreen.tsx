@@ -1,10 +1,9 @@
-import { useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Ionicons } from "@expo/vector-icons";
-import { fetchBoxes, fetchByoSnacks, type CatalogBox, type ByoSnack } from "../../lib/api/catalog";
+import { fetchBoxes, type CatalogBox } from "../../lib/api/catalog";
 import { addBuildABoxToCart } from "../../lib/api/cart";
 import { formatPriceCents } from "../../lib/utils/format";
 import { useToast } from "../../lib/toast/toast-context";
@@ -13,367 +12,212 @@ import type { ShopStackParamList } from "../../navigation/ShopStack";
 
 type Nav = NativeStackNavigationProp<ShopStackParamList, "BuildABox">;
 
-/**
- * Mirrors src/components/features/build-a-box/build-a-box-picker.tsx's
- * flow exactly: pick a size, then pick exactly that many snacks from the
- * BYO-eligible list, submit via the same addBuildABoxToCart -> POST
- * /api/cart/items the web picker calls. Local component state instead of
- * the web version's Zustand store - no cross-screen persistence need here,
- * the whole picker lives on one screen.
- */
+const SNACK_TYPES = [
+  { key: "chips", label: "Chips / Crisps" },
+  { key: "candy", label: "Candy" },
+  { key: "cookies", label: "Cookies" },
+  { key: "cakes", label: "Cakes / Pastries" },
+  { key: "crackers", label: "Crackers" },
+  { key: "nuts", label: "Nuts / Trail Mix" },
+  { key: "gummies", label: "Gummies" },
+  { key: "chocolate", label: "Chocolate" },
+] as const;
+
+const FLAVORS = [
+  { key: "sweet", label: "Sweet" },
+  { key: "salty", label: "Salty" },
+  { key: "spicy", label: "Spicy / Hot" },
+  { key: "sour", label: "Sour" },
+  { key: "savory", label: "Savory" },
+  { key: "fruity", label: "Fruity" },
+  { key: "chocolatey", label: "Chocolatey" },
+] as const;
+
+type SnackTypeKey = typeof SNACK_TYPES[number]["key"];
+type FlavorKey = typeof FLAVORS[number]["key"];
+
 export function BuildABoxScreen() {
   const navigation = useNavigation<Nav>();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 
-  const boxesQuery = useQuery({ queryKey: ["catalog", "boxes"], queryFn: () => fetchBoxes() });
-  const snacksQuery = useQuery({ queryKey: ["catalog", "byo-snacks"], queryFn: fetchByoSnacks });
+  const boxesQuery = useQuery({
+    queryKey: ["catalog", "boxes"],
+    queryFn: () => fetchBoxes(),
+  });
 
   const [selectedBox, setSelectedBox] = useState<CatalogBox | null>(null);
-  const [selections, setSelections] = useState<Record<string, number>>({});
-  const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [selectedSnackTypes, setSelectedSnackTypes] = useState<Set<SnackTypeKey>>(new Set());
+  const [selectedFlavors, setSelectedFlavors] = useState<Set<FlavorKey>>(new Set());
 
-  const buildABoxes = useMemo(
-    () =>
-      (boxesQuery.data ?? [])
-        .filter((box) => box.box_type === "build_a_box")
-        .sort((a, b) => (a.slot_count ?? 0) - (b.slot_count ?? 0)),
-    [boxesQuery.data]
-  );
-
-  const picked = Object.values(selections).reduce((sum, qty) => sum + qty, 0);
-  const target = selectedBox?.slot_count ?? 0;
-  const canSubmit = selectedBox !== null && picked === target && status !== "submitting";
+  const buildABoxes = (boxesQuery.data ?? [])
+    .filter((box) => box.box_type === "build_a_box")
+    .sort((a, b) => (a.slot_count ?? 0) - (b.slot_count ?? 0));
 
   function selectBox(box: CatalogBox) {
     setSelectedBox(box);
-    setSelections({});
-    setStatus("idle");
-    setStatusMessage(null);
+    setSelectedSnackTypes(new Set());
+    setSelectedFlavors(new Set());
   }
 
-  function addSnack(snackId: string) {
-    if (picked >= target) return;
-    setSelections((prev) => ({ ...prev, [snackId]: (prev[snackId] ?? 0) + 1 }));
-  }
-
-  function removeSnack(snackId: string) {
-    setSelections((prev) => {
-      const next = { ...prev };
-      if (!next[snackId]) return prev;
-      next[snackId] -= 1;
-      if (next[snackId] <= 0) delete next[snackId];
+  function toggleSnackType(key: SnackTypeKey) {
+    setSelectedSnackTypes((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
       return next;
     });
   }
 
+  function toggleFlavor(key: FlavorKey) {
+    setSelectedFlavors((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+
+  const canSubmit =
+    selectedBox !== null &&
+    selectedSnackTypes.size > 0 &&
+    selectedFlavors.size > 0;
+
   const submitMutation = useMutation({
     mutationFn: () =>
-      addBuildABoxToCart(
-        selectedBox!.slug,
-        Object.entries(selections).map(([snackId, quantity]) => ({ snackId, quantity }))
-      ),
-    onMutate: () => {
-      setStatus("submitting");
-      setStatusMessage(null);
-    },
+      addBuildABoxToCart(selectedBox!.slug, {
+        snackTypes: Array.from(selectedSnackTypes),
+        flavors: Array.from(selectedFlavors),
+      }),
     onSuccess: () => {
-      setStatus("success");
-      setSelections({});
       queryClient.invalidateQueries({ queryKey: ["cart"] });
-      showToast(`${selectedBox?.title ?? "Build-a-Box"} added to cart`);
+      showToast("Added to cart!");
+      navigation.goBack();
     },
-    onError: (error: Error) => {
-      setStatus("error");
-      setStatusMessage(error.message || "Something went wrong. Please try again.");
-      showToast(error.message || "Couldn't add to cart", "error");
+    onError: (err: Error) => {
+      showToast(err.message ?? "Something went wrong. Please try again.");
     },
   });
 
-  if (boxesQuery.isPending || snacksQuery.isPending) {
+  if (boxesQuery.isLoading) {
     return (
-      <View style={styles.centerState}>
-        <ActivityIndicator color={colors.primary} size="large" />
-      </View>
-    );
-  }
-
-  if (boxesQuery.isError || snacksQuery.isError) {
-    return (
-      <View style={styles.centerState}>
-        <Ionicons name="cloud-offline-outline" size={32} color={colors.mutedForeground} />
-        <Text style={styles.emptyText}>Couldn't load Build-a-Box. Pull to refresh or try again shortly.</Text>
+      <View style={styles.center}>
+        <Text style={styles.muted}>Loading...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.heading}>Build Your Own Box</Text>
-        <Text style={styles.subheading}>Pick a size, then choose exactly that many snacks.</Text>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Text style={styles.title}>Build Your Own Box</Text>
+      <Text style={styles.subtitle}>
+        Pick a size, then tell us your preferences — we will hand-pack it fresh.
+      </Text>
 
-        <View style={styles.sizeRow}>
-          {buildABoxes.map((box) => {
-            const active = selectedBox?.id === box.id;
-            return (
-              <Pressable
-                key={box.id}
-                onPress={() => selectBox(box)}
-                style={({ pressed }) => [
-                  styles.sizeCard,
-                  active && styles.sizeCardActive,
-                  pressed && styles.sizeCardPressed,
-                ]}
-              >
-                <Text style={styles.sizeTitle}>{box.title}</Text>
-                <Text style={styles.sizeSubtitle}>
-                  {formatPriceCents(box.price_cents)} â€” {box.slot_count} items
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {selectedBox && (
-          <>
-            {status === "success" && <Text style={styles.successText}>Added to your cart.</Text>}
-            {status === "error" && statusMessage && <Text style={styles.errorText}>{statusMessage}</Text>}
-
-            {(snacksQuery.data ?? []).length === 0 ? (
-              <View style={styles.centerState}>
-                <Ionicons name="basket-outline" size={32} color={colors.mutedForeground} />
-                <Text style={styles.emptyText}>
-                  No snacks are eligible for Build-a-Box yet. Mark some as BYO-eligible in the admin dashboard.
-                </Text>
-              </View>
-            ) : (
-              <FlatList
-                data={snacksQuery.data ?? []}
-                keyExtractor={(snack) => snack.id}
-                numColumns={2}
-                scrollEnabled={false}
-                columnWrapperStyle={styles.snackRow}
-                contentContainerStyle={styles.snackGrid}
-                renderItem={({ item: snack }) => (
-                  <SnackPickerCard
-                    snack={snack}
-                    quantity={selections[snack.id] ?? 0}
-                    disabled={picked >= target}
-                    onAdd={() => addSnack(snack.id)}
-                    onRemove={() => removeSnack(snack.id)}
-                  />
-                )}
-              />
-            )}
-          </>
-        )}
-      </ScrollView>
+      <Text style={styles.sectionTitle}>Step 1 — Choose a size</Text>
+      <View style={styles.boxRow}>
+        {buildABoxes.map((box) => {
+          const selected = selectedBox?.id === box.id;
+          return (
+            <Pressable
+              key={box.id}
+              style={[styles.boxCard, selected && styles.boxCardSelected]}
+              onPress={() => selectBox(box)}
+            >
+              <Text style={[styles.boxName, selected && styles.boxNameSelected]}>
+                {box.title}
+              </Text>
+              <Text style={styles.boxMeta}>
+                {formatPriceCents(box.price_cents)} · {box.slot_count} items
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
       {selectedBox && (
-        <View style={styles.stickyBar}>
-          <Text style={styles.pickedText}>
-            {picked} / {target} picked
-          </Text>
+        <>
+          <Text style={styles.sectionTitle}>Step 2 — Snack types</Text>
+          <Text style={styles.sectionHint}>Check everything you would like included.</Text>
+          <View style={styles.checkGrid}>
+            {SNACK_TYPES.map(({ key, label }) => {
+              const checked = selectedSnackTypes.has(key);
+              return (
+                <Pressable
+                  key={key}
+                  style={[styles.checkItem, checked && styles.checkItemSelected]}
+                  onPress={() => toggleSnackType(key)}
+                >
+                  <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+                    {checked && <Text style={styles.checkmark}>?</Text>}
+                  </View>
+                  <Text style={[styles.checkLabel, checked && styles.checkLabelSelected]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Text style={styles.sectionTitle}>Step 3 — Flavor preferences</Text>
+          <Text style={styles.sectionHint}>Check all the flavors you enjoy.</Text>
+          <View style={styles.checkGrid}>
+            {FLAVORS.map(({ key, label }) => {
+              const checked = selectedFlavors.has(key);
+              return (
+                <Pressable
+                  key={key}
+                  style={[styles.checkItem, checked && styles.checkItemSelected]}
+                  onPress={() => toggleFlavor(key)}
+                >
+                  <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+                    {checked && <Text style={styles.checkmark}>?</Text>}
+                  </View>
+                  <Text style={[styles.checkLabel, checked && styles.checkLabelSelected]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           <Pressable
-            style={({ pressed }) => [
-              styles.submitButton,
-              !canSubmit && styles.submitButtonDisabled,
-              pressed && canSubmit && styles.submitButtonPressed,
-            ]}
-            disabled={!canSubmit}
+            style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
+            disabled={!canSubmit || submitMutation.isPending}
             onPress={() => submitMutation.mutate()}
           >
-            <Text style={styles.submitButtonText}>{status === "submitting" ? "Adding..." : "Add to Cart"}</Text>
+            <Text style={styles.submitBtnText}>
+              {submitMutation.isPending ? "Adding..." : `Add to Cart — ${formatPriceCents(selectedBox.price_cents)}`}
+            </Text>
           </Pressable>
-        </View>
+        </>
       )}
-    </View>
-  );
-}
-
-function SnackPickerCard({
-  snack,
-  quantity,
-  disabled,
-  onAdd,
-  onRemove,
-}: {
-  snack: ByoSnack;
-  quantity: number;
-  disabled: boolean;
-  onAdd: () => void;
-  onRemove: () => void;
-}) {
-  return (
-    <View style={styles.snackCard}>
-      <Text style={styles.snackName} numberOfLines={2}>
-        {snack.name}
-      </Text>
-      <Text style={styles.snackPrice}>{formatPriceCents(snack.price_cents ?? 0)}</Text>
-      <View style={styles.snackStepper}>
-        <Pressable onPress={onRemove} disabled={quantity === 0} style={styles.stepperButton}>
-          <Ionicons name="remove" size={16} color={quantity === 0 ? colors.mutedForeground : colors.foreground} />
-        </Pressable>
-        <Text style={styles.stepperValue}>{quantity}</Text>
-        <Pressable onPress={onAdd} disabled={disabled} style={styles.stepperButton}>
-          <Ionicons name="add" size={16} color={disabled ? colors.mutedForeground : colors.foreground} />
-        </Pressable>
-      </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    padding: spacing.lg,
-    paddingBottom: spacing["4xl"],
-  },
-  heading: {
-    ...typography.sizes["2xl"],
-    fontFamily: typography.fontFamilyMedium,
-    color: colors.foreground,
-  },
-  subheading: {
-    ...typography.sizes.sm,
-    color: colors.mutedForeground,
-    marginTop: spacing.xs,
-    marginBottom: spacing.lg,
-  },
-  sizeRow: {
-    gap: spacing.sm,
-  },
-  sizeCard: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  sizeCardActive: {
-    borderColor: colors.primary,
-    borderWidth: 2,
-  },
-  sizeCardPressed: {
-    opacity: 0.8,
-  },
-  sizeTitle: {
-    ...typography.sizes.base,
-    fontFamily: typography.fontFamilyMedium,
-    color: colors.foreground,
-  },
-  sizeSubtitle: {
-    ...typography.sizes.sm,
-    color: colors.mutedForeground,
-    marginTop: spacing.xs / 2,
-  },
-  successText: {
-    ...typography.sizes.sm,
-    fontFamily: typography.fontFamilyMedium,
-    color: colors.primary,
-    marginTop: spacing.md,
-  },
-  errorText: {
-    ...typography.sizes.sm,
-    color: colors.destructive,
-    marginTop: spacing.md,
-  },
-  snackGrid: {
-    marginTop: spacing.md,
-  },
-  snackRow: {
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  snackCard: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.sm,
-  },
-  snackName: {
-    ...typography.sizes.sm,
-    fontFamily: typography.fontFamilyMedium,
-    color: colors.foreground,
-  },
-  snackPrice: {
-    ...typography.sizes.xs,
-    color: colors.mutedForeground,
-    marginTop: spacing.xs / 2,
-  },
-  snackStepper: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  stepperButton: {
-    width: 28,
-    height: 28,
-    borderRadius: radii.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stepperValue: {
-    ...typography.sizes.sm,
-    color: colors.foreground,
-    minWidth: 16,
-    textAlign: "center",
-  },
-  stickyBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.card,
-  },
-  pickedText: {
-    ...typography.sizes.base,
-    fontFamily: typography.fontFamilyMedium,
-    color: colors.foreground,
-  },
-  submitButton: {
-    backgroundColor: colors.primary,
-    borderRadius: radii.full,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xl,
-  },
-  submitButtonDisabled: {
-    backgroundColor: colors.muted,
-  },
-  submitButtonPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
-  },
-  submitButtonText: {
-    ...typography.sizes.sm,
-    fontFamily: typography.fontFamilyMedium,
-    color: colors.primaryForeground,
-  },
-  centerState: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.sm,
-    backgroundColor: colors.background,
-    paddingHorizontal: spacing["2xl"],
-    paddingVertical: spacing["3xl"],
-  },
-  emptyText: {
-    ...typography.sizes.sm,
-    color: colors.mutedForeground,
-    textAlign: "center",
-  },
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { padding: spacing[4], paddingBottom: spacing[12] },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  title: { ...typography.heading, fontSize: 22, color: colors.foreground },
+  subtitle: { ...typography.body, color: colors.mutedForeground, marginTop: spacing[1], marginBottom: spacing[2] },
+  sectionTitle: { ...typography.heading, fontSize: 16, color: colors.foreground, marginTop: spacing[6], marginBottom: spacing[1] },
+  sectionHint: { ...typography.body, fontSize: 13, color: colors.mutedForeground, marginBottom: spacing[3] },
+  muted: { color: colors.mutedForeground },
+  boxRow: { flexDirection: "row", gap: spacing[3], flexWrap: "wrap" },
+  boxCard: { flex: 1, minWidth: 100, borderWidth: 1, borderColor: colors.border, borderRadius: radii.lg, padding: spacing[3], backgroundColor: colors.card },
+  boxCardSelected: { borderColor: colors.primary, backgroundColor: colors.primary + "0D" },
+  boxName: { ...typography.body, fontWeight: "600", color: colors.foreground },
+  boxNameSelected: { color: colors.primary },
+  boxMeta: { ...typography.body, fontSize: 12, color: colors.mutedForeground, marginTop: spacing[1] },
+  checkGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing[2] },
+  checkItem: { flexDirection: "row", alignItems: "center", gap: spacing[2], borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, paddingHorizontal: spacing[3], paddingVertical: spacing[2], backgroundColor: colors.card },
+  checkItemSelected: { borderColor: colors.primary, backgroundColor: colors.primary + "0D" },
+  checkbox: { width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  checkboxChecked: { backgroundColor: colors.primary, borderColor: colors.primary },
+  checkmark: { color: "#fff", fontSize: 11, fontWeight: "700" },
+  checkLabel: { ...typography.body, fontSize: 13, color: colors.foreground },
+  checkLabelSelected: { fontWeight: "600", color: colors.primary },
+  submitBtn: { marginTop: spacing[8], backgroundColor: colors.primary, borderRadius: radii.md, paddingVertical: spacing[4], alignItems: "center" },
+  submitBtnDisabled: { opacity: 0.5 },
+  submitBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
 });
