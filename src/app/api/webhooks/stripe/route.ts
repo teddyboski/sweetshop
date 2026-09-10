@@ -369,7 +369,7 @@ async function createOrderFromSession(
             p_user_id: referredProfile.referred_by,
             p_delta_points: REFERRAL_REWARD_POINTS,
             p_reason: "referral_referrer_credit",
-            p_order_id: null,
+            
           });
           await admin.rpc("credit_rewards_points", {
             p_user_id: userId,
@@ -878,7 +878,7 @@ async function createOrderFromPaymentIntent(
             p_user_id: referredProfile.referred_by,
             p_delta_points: REFERRAL_REWARD_POINTS,
             p_reason: "referral_referrer_credit",
-            p_order_id: null,
+            
           });
           await admin.rpc("credit_rewards_points", {
             p_user_id: userId,

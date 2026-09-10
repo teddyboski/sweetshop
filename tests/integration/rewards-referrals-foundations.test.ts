@@ -147,7 +147,7 @@ describe("redeem_rewards_points", () => {
     const { data: result } = await admin.rpc("redeem_rewards_points", {
       p_user_id: userId,
       p_points: 300,
-      p_order_id: null,
+      p_order_id: undefined,
     });
     expect(result).toBe(true);
 
@@ -170,7 +170,7 @@ describe("redeem_rewards_points", () => {
     const { data: result } = await admin.rpc("redeem_rewards_points", {
       p_user_id: userId,
       p_points: 500,
-      p_order_id: null,
+      p_order_id: undefined,
     });
     expect(result).toBe(false);
 

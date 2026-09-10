@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     p_user_id: userId,
     p_delta_points: deltaPoints,
     p_reason: "admin_adjustment",
-    p_order_id: null,
+    
   });
   if (rpcError) {
     return NextResponse.json({ data: null, error: rpcError.message }, { status: 500 });

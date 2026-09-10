@@ -51,7 +51,6 @@ export async function POST(request: NextRequest) {
       merch_item_id: itemResult.merchItemId ?? null,
       merch_variant_id: itemResult.merchVariantId ?? null,
       quantity: itemResult.quantity!,
-      // @ts-expect-error byo_preferences added by migration, types regenerate after supabase db push
       byo_preferences: itemResult.byoPreferences ?? null,
     })
     .select("id")

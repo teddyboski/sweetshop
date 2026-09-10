@@ -27,7 +27,7 @@ export default async function AdminOrderDetailPage({ params }: AdminOrderDetailP
   const { data: items } = (await admin
     .from("order_items")
     .select("id, item_type, quantity, unit_price_cents, byo_preferences, boxes(title, box_type), snacks(name)")
-    .eq("order_id", id)) as any;
+    .eq("order_id", id));
 
   return (
     <div className="max-w-2xl">
@@ -40,7 +40,7 @@ export default async function AdminOrderDetailPage({ params }: AdminOrderDetailP
         <div>
           <h2 className="font-heading text-lg font-semibold">Line items</h2>
           <div className="mt-2 divide-y rounded-lg border">
-            {(items ?? []).map((item: any) => {
+            {(items ?? []).map((item) => {
               const isByo = item.boxes?.box_type === "build_a_box";
               const prefs = item.byo_preferences as {
                 snackTypes?: string[];
