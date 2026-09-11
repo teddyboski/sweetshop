@@ -1,4 +1,4 @@
-﻿import { z } from "zod";
+import { z } from "zod";
 
 const SNACK_TYPES = ["chips", "candy", "cookies", "cakes", "crackers", "nuts", "gummies", "chocolate"] as const;
 const FLAVORS = ["sweet", "salty", "spicy", "sour", "savory", "fruity", "chocolatey"] as const;
@@ -21,6 +21,7 @@ const boxItemSchema = z.object({
 const snackItemSchema = z.object({
   itemType: z.literal("snack"),
   snackId: z.string().uuid(),
+  snackVariantId: z.string().uuid().optional(),
   quantity: z.number().int().min(1),
 });
 

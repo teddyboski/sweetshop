@@ -81,6 +81,8 @@ export async function POST(request: NextRequest) {
 interface PreparedItem {
   boxId?: string;
   snackId?: string;
+  snackVariantId?: string;
+  unitPriceCents?: number;
   merchItemId?: string;
   merchVariantId?: string;
   quantity?: number;
@@ -137,7 +139,7 @@ async function prepareSnackItem(
 ): Promise<PreparedItem> {
   const { data: snack, error } = await admin
     .from("snacks")
-    .select("id, is_sellable_individually, status")
+    .select("id, is_sellable_individually, status, price_cents")
     .eq("id", data.snackId)
     .maybeSingle();
 
@@ -146,7 +148,19 @@ async function prepareSnackItem(
     return { error: "Snack not found", status: 404 };
   }
 
-  return { snackId: snack.id, quantity: data.quantity };
+  if (data.snackVariantId) {
+    const { data: variant, error: variantError } = await admin
+      .from("snack_variants")
+      .select("id, price_cents, status")
+      .eq("id", data.snackVariantId)
+      .eq("snack_id", data.snackId)
+      .maybeSingle();
+    if (variantError) return { error: variantError.message, status: 500 };
+    if (!variant || variant.status !== "active") return { error: "Size not available", status: 404 };
+    return { snackId: snack.id, snackVariantId: variant.id, unitPriceCents: variant.price_cents, quantity: data.quantity };
+  }
+
+  return { snackId: snack.id, unitPriceCents: snack.price_cents ?? undefined, quantity: data.quantity };
 }
 
 async function prepareMerchItem(

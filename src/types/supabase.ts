@@ -1202,6 +1202,44 @@ export type Database = {
           },
         ]
       }
+      snack_variants: {
+        Row: {
+          created_at: string
+          id: string
+          price_cents: number
+          size: string
+          snack_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          price_cents: number
+          size: string
+          snack_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          price_cents?: number
+          size?: string
+          snack_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "snack_variants_snack_id_fkey"
+            columns: ["snack_id"]
+            isOneToOne: false
+            referencedRelation: "snacks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       snacks: {
         Row: {
           brand: string | null

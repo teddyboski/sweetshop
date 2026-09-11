@@ -47,7 +47,7 @@ export async function getSellableSnacks(filters: { category?: string; tag?: stri
   let query = supabase
     .from("snacks")
     .select(
-      "id, slug, name, brand, category, tags, price_cents, is_sellable_individually, product_images(image_url, is_primary)"
+      "id, slug, name, brand, category, tags, price_cents, is_sellable_individually, product_images(image_url, is_primary, sort_order), snack_variants(id, size, price_cents, status)"
     )
     .eq("is_sellable_individually", true)
     .eq("status", "active")
@@ -97,15 +97,20 @@ export async function getSnackBySlug(slug: string) {
   const { data, error } = await supabase
     .from("snacks")
     .select(
-      "id, slug, name, brand, category, tags, price_cents, is_sellable_individually, product_images(image_url, is_primary)"
+      "id, slug, name, brand, category, tags, price_cents, is_sellable_individually, product_images(image_url, is_primary, sort_order), snack_variants(id, size, price_cents, status)"
     )
     .eq("slug", slug)
     .eq("status", "active")
     .maybeSingle();
   if (error) throw error;
   if (!data) return data;
-  const { product_images, ...snack } = data;
-  return { ...snack, imageUrl: primaryImageUrl(product_images), imageUrls: sortedImageUrls(product_images) };
+  const { product_images, snack_variants, ...snack } = data;
+  return {
+    ...snack,
+    imageUrl: primaryImageUrl(product_images),
+    imageUrls: sortedImageUrls(product_images),
+    variants: (snack_variants ?? []).filter((v) => v.status === "active").sort((a, b) => a.price_cents - b.price_cents),
+  };
 }
 
 export async function getBoxItems(boxId: string) {
