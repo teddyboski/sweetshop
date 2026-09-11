@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getSnackBySlug } from "@/lib/supabase/queries/catalog";
 import { formatPriceCents } from "@/lib/utils";
-import { ZoomableProductImage } from "@/components/shared/zoomable-product-image";
+import { ProductImageCarousel } from "@/components/shared/product-image-carousel";
 import { AddToCartButton } from "@/components/features/cart/add-to-cart-button";
 
 export const revalidate = 60;
@@ -35,7 +35,7 @@ export default async function SnackDetailPage({ params }: SnackDetailPageProps) 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-        <ZoomableProductImage imageUrl={snack.imageUrl} alt={snack.name} className="rounded-xl" />
+        <ProductImageCarousel imageUrls={snack.imageUrls} alt={snack.name} />
         <div>
           <h1 className="font-heading text-2xl font-semibold">{snack.name}</h1>
           {snack.brand && <p className="text-sm text-muted-foreground">{snack.brand}</p>}

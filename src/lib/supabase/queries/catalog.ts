@@ -11,6 +11,17 @@ function primaryImageUrl(images: ProductImageRow[] | null | undefined): string |
   return images.find((img) => img.is_primary)?.image_url ?? images[0].image_url;
 }
 
+function sortedImageUrls(images: { image_url: string; is_primary: boolean; sort_order?: number | null }[] | null | undefined): string[] {
+  if (!images || images.length === 0) return [];
+  return [...images]
+    .sort((a, b) => {
+      if (a.is_primary && !b.is_primary) return -1;
+      if (!a.is_primary && b.is_primary) return 1;
+      return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    })
+    .map((img) => img.image_url);
+}
+
 export async function getActiveBoxes(filters: { category?: string } = {}) {
   const supabase = createPublicSupabaseClient();
   let query = supabase
@@ -78,7 +89,7 @@ export async function getBoxBySlug(slug: string) {
   if (error) throw error;
   if (!data) return data;
   const { product_images, ...box } = data;
-  return { ...box, imageUrl: primaryImageUrl(product_images) };
+  return { ...box, imageUrl: primaryImageUrl(product_images), imageUrls: sortedImageUrls(product_images) };
 }
 
 export async function getSnackBySlug(slug: string) {
@@ -94,7 +105,7 @@ export async function getSnackBySlug(slug: string) {
   if (error) throw error;
   if (!data) return data;
   const { product_images, ...snack } = data;
-  return { ...snack, imageUrl: primaryImageUrl(product_images) };
+  return { ...snack, imageUrl: primaryImageUrl(product_images), imageUrls: sortedImageUrls(product_images) };
 }
 
 export async function getBoxItems(boxId: string) {

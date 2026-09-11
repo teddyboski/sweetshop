@@ -20,21 +20,23 @@ export function BoxForm({ box }: BoxFormProps) {
   const [slug, setSlug] = useState(box?.slug ?? "");
   const [title, setTitle] = useState(box?.title ?? "");
   const [description, setDescription] = useState(box?.description ?? "");
-  // Priced in dollars in the UI, converted to cents on submit - same fix
-  // as snack-form.tsx (2026-08-12), same bug ("expected int, received
-  // number" from typing e.g. "15.00" into a raw-cents field).
   const [priceDollars, setPriceDollars] = useState(box ? (box.price_cents / 100).toFixed(2) : "");
   const [isSubscription, setIsSubscription] = useState(box?.is_subscription ?? false);
   const [boxType, setBoxType] = useState(box?.box_type ?? "curated");
-  // Milestone 18: which dedicated storefront page/nav destination this box
-  // belongs on - orthogonal to boxType. Not applicable to build_a_box,
-  // since that flow is reached directly, not via a category listing.
   const [category, setCategory] = useState(box?.category ?? "");
   const [slotCount, setSlotCount] = useState(box?.slot_count ? String(box.slot_count) : "");
   const [status, setStatus] = useState(box?.status ?? "draft");
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageFiles, setImageFiles] = useState<[File | null, File | null, File | null]>([null, null, null]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  function setImageFile(index: 0 | 1 | 2, file: File | null) {
+    setImageFiles((prev) => {
+      const next: [File | null, File | null, File | null] = [...prev] as [File | null, File | null, File | null];
+      next[index] = file;
+      return next;
+    });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -68,11 +70,13 @@ export function BoxForm({ box }: BoxFormProps) {
 
     const boxId = isEditing ? box!.id : body.data.id;
 
-    if (imageFile) {
+    for (let i = 0; i < 3; i++) {
+      const file = imageFiles[i];
+      if (!file) continue;
       const formData = new FormData();
-      formData.append("file", imageFile);
+      formData.append("file", file);
       formData.append("boxId", boxId);
-      formData.append("isPrimary", "true");
+      formData.append("isPrimary", i === 0 ? "true" : "false");
       const uploadResponse = await authenticatedFetch("/api/admin/uploads", { method: "POST", body: formData });
       if (!uploadResponse.ok) {
         const uploadBody = await uploadResponse.json();
@@ -105,16 +109,7 @@ export function BoxForm({ box }: BoxFormProps) {
       </div>
       <div className="flex flex-col gap-1.5">
         <label htmlFor="priceDollars" className="text-sm font-medium">Price ($)</label>
-        <Input
-          id="priceDollars"
-          type="number"
-          step="0.01"
-          min="0"
-          placeholder="e.g. 15.00"
-          value={priceDollars}
-          onChange={(e) => setPriceDollars(e.target.value)}
-          required
-        />
+        <Input id="priceDollars" type="number" step="0.01" min="0" placeholder="e.g. 15.00" value={priceDollars} onChange={(e) => setPriceDollars(e.target.value)} required />
       </div>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={isSubscription} onChange={(e) => setIsSubscription(e.target.checked)} />
@@ -136,24 +131,15 @@ export function BoxForm({ box }: BoxFormProps) {
       )}
       {boxType !== "build_a_box" && (
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="category" className="text-sm font-medium">
-            Storefront category
-          </label>
-          <select
-            id="category"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="rounded-md border p-2 text-sm"
-          >
+          <label htmlFor="category" className="text-sm font-medium">Storefront category</label>
+          <select id="category" value={category} onChange={(e) => setCategory(e.target.value)} className="rounded-md border p-2 text-sm">
             <option value="">— None yet —</option>
             <option value="snack_box">Snack Box</option>
             <option value="candy_box">Candy Box</option>
             <option value="mystery_box">Mystery Box</option>
             <option value="passport_box">Passport Box</option>
           </select>
-          <p className="text-xs text-muted-foreground">
-            Which shop page this box appears on. Leave unset to keep it off the new category pages for now.
-          </p>
+          <p className="text-xs text-muted-foreground">Which shop page this box appears on.</p>
         </div>
       )}
       <div className="flex flex-col gap-1.5">
@@ -164,15 +150,16 @@ export function BoxForm({ box }: BoxFormProps) {
           <option value="archived">Archived</option>
         </select>
       </div>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="image" className="text-sm font-medium">Photo (JPEG/PNG/WebP, max 5 MB)</label>
-        <input
-          id="image"
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-          className="text-sm"
-        />
+      <div className="flex flex-col gap-3">
+        <p className="text-sm font-medium">Photos (JPEG/PNG/WebP, max 5 MB each)</p>
+        {([0, 1, 2] as const).map((i) => (
+          <div key={i} className="flex flex-col gap-1">
+            <label htmlFor={`image-${i}`} className="text-xs text-muted-foreground">
+              {i === 0 ? "Primary photo" : `Additional photo ${i + 1}`}
+            </label>
+            <input id={`image-${i}`} type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setImageFile(i, e.target.files?.[0] ?? null)} className="text-sm" />
+          </div>
+        ))}
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <Button type="submit" disabled={saving}>

@@ -21,19 +21,22 @@ export function SnackForm({ snack }: SnackFormProps) {
   const [name, setName] = useState(snack?.name ?? "");
   const [brand, setBrand] = useState(snack?.brand ?? "");
   const [category, setCategory] = useState(snack?.category ?? "");
-  // Priced in dollars in the UI (e.g. "4.50"), converted to cents on
-  // submit - the field used to be raw integer cents, which is how Ted hit
-  // "Invalid input: expected int, received number" typing "4.50" into it.
-  const [priceDollars, setPriceDollars] = useState(
-    snack?.price_cents ? (snack.price_cents / 100).toFixed(2) : ""
-  );
+  const [priceDollars, setPriceDollars] = useState(snack?.price_cents ? (snack.price_cents / 100).toFixed(2) : "");
   const [initialQuantity, setInitialQuantity] = useState("0");
   const [isSellableIndividually, setIsSellableIndividually] = useState(snack?.is_sellable_individually ?? false);
   const [isByoEligible, setIsByoEligible] = useState(snack?.is_byo_eligible ?? true);
   const [status, setStatus] = useState(snack?.status ?? "active");
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageFiles, setImageFiles] = useState<[File | null, File | null, File | null]>([null, null, null]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  function setImageFile(index: 0 | 1 | 2, file: File | null) {
+    setImageFiles((prev) => {
+      const next: [File | null, File | null, File | null] = [...prev] as [File | null, File | null, File | null];
+      next[index] = file;
+      return next;
+    });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -66,11 +69,13 @@ export function SnackForm({ snack }: SnackFormProps) {
 
     const snackId = isEditing ? snack!.id : body.data.id;
 
-    if (imageFile) {
+    for (let i = 0; i < 3; i++) {
+      const file = imageFiles[i];
+      if (!file) continue;
       const formData = new FormData();
-      formData.append("file", imageFile);
+      formData.append("file", file);
       formData.append("snackId", snackId);
-      formData.append("isPrimary", "true");
+      formData.append("isPrimary", i === 0 ? "true" : "false");
       const uploadResponse = await authenticatedFetch("/api/admin/uploads", { method: "POST", body: formData });
       if (!uploadResponse.ok) {
         const uploadBody = await uploadResponse.json();
@@ -99,14 +104,9 @@ export function SnackForm({ snack }: SnackFormProps) {
       </div>
       <div className="flex flex-col gap-1.5">
         <label htmlFor="status" className="text-sm font-medium">Status</label>
-        <select
-          id="status"
-          value={status}
-          onChange={(e) => setStatus(e.target.value as "active" | "archived")}
-          className="rounded-md border p-2 text-sm"
-        >
+        <select id="status" value={status} onChange={(e) => setStatus(e.target.value as "active" | "archived")} className="rounded-md border p-2 text-sm">
           <option value="active">Active - visible to customers</option>
-          <option value="archived">Archived - hidden, don&apos;t carry anymore</option>
+          <option value="archived">Archived - hidden</option>
         </select>
       </div>
       <div className="flex flex-col gap-1.5">
@@ -115,21 +115,7 @@ export function SnackForm({ snack }: SnackFormProps) {
       </div>
       <div className="flex flex-col gap-1.5">
         <label htmlFor="category" className="text-sm font-medium">Category</label>
-        <Input
-          id="category"
-          list="snack-categories"
-          value={category ?? ""}
-          onChange={(e) => setCategory(e.target.value)}
-          placeholder="e.g. house_snacks, candy, chips"
-        />
-        {/* Suggestions only - free text still accepted, so this never blocks
-            a genuinely new category. house_snacks added 2026-08-12 for
-            Ted's in-house made items (trail mix, dipped cookies, loaded
-            rice krispie treats), kept separate from store-bought snacks -
-            it now has its own dedicated storefront page/tile (Milestone
-            19), not just a homepage shelf. cakes added the same milestone
-            for honey buns/pies - tagged and browsed the same way as
-            candy/chips/cookies, no dedicated page of its own. */}
+        <Input id="category" list="snack-categories" value={category ?? ""} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. house_snacks, candy, chips" />
         <datalist id="snack-categories">
           <option value="house_snacks" />
           <option value="cakes" />
@@ -144,52 +130,33 @@ export function SnackForm({ snack }: SnackFormProps) {
       </div>
       <div className="flex flex-col gap-1.5">
         <label htmlFor="priceDollars" className="text-sm font-medium">Price ($)</label>
-        <Input
-          id="priceDollars"
-          type="number"
-          step="0.01"
-          min="0"
-          placeholder="e.g. 4.50"
-          value={priceDollars}
-          onChange={(e) => setPriceDollars(e.target.value)}
-        />
+        <Input id="priceDollars" type="number" step="0.01" min="0" placeholder="e.g. 4.50" value={priceDollars} onChange={(e) => setPriceDollars(e.target.value)} />
       </div>
       {!isEditing && (
         <div className="flex flex-col gap-1.5">
           <label htmlFor="initialQuantity" className="text-sm font-medium">Quantity in stock</label>
-          <Input
-            id="initialQuantity"
-            type="number"
-            min="0"
-            value={initialQuantity}
-            onChange={(e) => setInitialQuantity(e.target.value)}
-          />
-          <p className="text-xs text-muted-foreground">
-            You can adjust this any time from Admin → Inventory.
-          </p>
+          <Input id="initialQuantity" type="number" min="0" value={initialQuantity} onChange={(e) => setInitialQuantity(e.target.value)} />
+          <p className="text-xs text-muted-foreground">You can adjust this any time from Admin → Inventory.</p>
         </div>
       )}
       <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={isSellableIndividually}
-          onChange={(e) => setIsSellableIndividually(e.target.checked)}
-        />
+        <input type="checkbox" checked={isSellableIndividually} onChange={(e) => setIsSellableIndividually(e.target.checked)} />
         Sellable individually
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={isByoEligible} onChange={(e) => setIsByoEligible(e.target.checked)} />
         Build-a-box eligible
       </label>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="image" className="text-sm font-medium">Photo (JPEG/PNG/WebP, max 5 MB)</label>
-        <input
-          id="image"
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-          className="text-sm"
-        />
+      <div className="flex flex-col gap-3">
+        <p className="text-sm font-medium">Photos (JPEG/PNG/WebP, max 5 MB each)</p>
+        {([0, 1, 2] as const).map((i) => (
+          <div key={i} className="flex flex-col gap-1">
+            <label htmlFor={`image-${i}`} className="text-xs text-muted-foreground">
+              {i === 0 ? "Primary photo" : `Additional photo ${i + 1}`}
+            </label>
+            <input id={`image-${i}`} type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setImageFile(i, e.target.files?.[0] ?? null)} className="text-sm" />
+          </div>
+        ))}
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <Button type="submit" disabled={saving}>
