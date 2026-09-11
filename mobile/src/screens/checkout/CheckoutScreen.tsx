@@ -51,8 +51,10 @@ export function CheckoutScreen() {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [postalCode, setPostalCode] = useState("");
+  const [promoCode, setPromoCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
 
   if (cartPending || !cart) {
     return (
@@ -207,6 +209,18 @@ export function CheckoutScreen() {
               </View>
               <View style={styles.rowItemLarge}>
                 <FormField label="ZIP code" value={postalCode} onChangeText={setPostalCode} keyboardType="number-pad" maxLength={10} />
+        <View style={styles.promoRow}>
+          <TextInput
+            style={styles.promoInput}
+            placeholder="Promo code (optional)"
+            placeholderTextColor={colors.mutedForeground}
+            value={promoCode}
+            onChangeText={(t) => { setPromoCode(t); setPromoError(null); }}
+            autoCapitalize="characters"
+            returnKeyType="done"
+          />
+        </View>
+        {promoError && <Text style={styles.errorText}>{promoError}</Text>}
               </View>
             </View>
           </View>
@@ -326,6 +340,8 @@ const styles = StyleSheet.create({
   rowItemLarge: {
     flex: 1,
   },
+  promoRow: { marginBottom: spacing.md },
+  promoInput: { ...typography.sizes.base, color: colors.foreground, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.card },
   errorText: {
     ...typography.sizes.sm,
     color: colors.destructive,

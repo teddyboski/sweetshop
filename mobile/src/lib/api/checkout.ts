@@ -23,6 +23,7 @@ export interface ShippingAddressInput {
 }
 
 interface CreatePaymentIntentInput {
+  promoCode?: string;
   guestEmail?: string;
   shippingAddress: ShippingAddressInput;
 }
