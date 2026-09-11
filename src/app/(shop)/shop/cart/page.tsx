@@ -3,7 +3,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveCartIdForPage } from "@/lib/cart/resolve-cart";
 import { getCartContents } from "@/lib/supabase/queries/cart";
-import { SNACK_ONLY_FREE_SHIPPING_THRESHOLD_CENTS } from "@/lib/cart/calculate-total";
+import { FREE_SHIPPING_THRESHOLD_CENTS } from "@/lib/cart/calculate-total";
 import { CartLineRow } from "@/components/features/cart/cart-line-row";
 import { CheckoutButton } from "@/components/features/checkout/checkout-button";
 import { formatPriceCents } from "@/lib/utils";
@@ -45,7 +45,7 @@ export default async function CartPage() {
   }
 
   const total = contents!.total;
-  const remainingForFreeShipping = SNACK_ONLY_FREE_SHIPPING_THRESHOLD_CENTS - total.subtotalCents;
+  const remainingForFreeShipping = FREE_SHIPPING_THRESHOLD_CENTS - total.subtotalCents;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
@@ -68,9 +68,9 @@ export default async function CartPage() {
             {total.shippingCents === 0 ? "Free" : formatPriceCents(total.shippingCents)}
           </span>
         </div>
-        {!total.hasBox && total.shippingCents > 0 && (
+        {total.shippingCents > 0 && remainingForFreeShipping > 0 && (
           <p className="text-xs text-muted-foreground">
-            Add {formatPriceCents(remainingForFreeShipping)} more, or add any box, for free shipping.
+            Add {formatPriceCents(remainingForFreeShipping)} more for free shipping.
           </p>
         )}
         <div className="flex justify-between border-t pt-2 font-medium">

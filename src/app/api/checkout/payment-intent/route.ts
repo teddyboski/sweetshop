@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
   if (parsed.data.promoCode) {
     const { data: promotion } = await admin
       .from("promotions")
-      .select("id, discount_type, value, usage_limit, used_count, expires_at")
+      .select("id, discount_type, value, usage_limit, used_count, expires_at, applies_to_shipping")
       .eq("code", parsed.data.promoCode.toUpperCase())
       .maybeSingle();
 

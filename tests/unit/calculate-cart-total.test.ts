@@ -1,51 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { calculateCartTotal } from "@/lib/cart/calculate-total";
+import {
+  calculateCartTotal,
+  FREE_SHIPPING_THRESHOLD_CENTS,
+  BOX_SHIPPING_SMALL_CENTS,
+  BOX_SHIPPING_MEDIUM_CENTS,
+  BOX_SHIPPING_LARGE_CENTS,
+  SNACK_SHIPPING_CENTS,
+  MERCH_SHIPPING_CENTS,
+} from "@/lib/cart/calculate-total";
 
 describe("calculateCartTotal", () => {
-  it("computes the correct total for a mixed cart (1 box + 2 loose snacks + 1 BYO box)", () => {
-    const result = calculateCartTotal([
-      { itemType: "box", unitPriceCents: 1500, quantity: 1 }, // curated box
-      { itemType: "snack", unitPriceCents: 300, quantity: 1 },
-      { itemType: "snack", unitPriceCents: 350, quantity: 1 },
-      { itemType: "box", unitPriceCents: 1500, quantity: 1 }, // build-a-box, item_type is 'box'
-    ]);
-
-    expect(result.subtotalCents).toBe(1500 + 300 + 350 + 1500);
-    expect(result.hasBox).toBe(true);
-    expect(result.shippingCents).toBe(0);
-    expect(result.totalCents).toBe(result.subtotalCents);
-  });
-
-  it("adds a $5 shipping fee to a snack-only cart under $25", () => {
-    const result = calculateCartTotal([
-      { itemType: "snack", unitPriceCents: 300, quantity: 2 },
-      { itemType: "snack", unitPriceCents: 350, quantity: 1 },
-    ]);
-
-    expect(result.subtotalCents).toBe(950);
-    expect(result.hasBox).toBe(false);
-    expect(result.shippingCents).toBe(500);
-    expect(result.totalCents).toBe(1450);
-  });
-
-  it("does not add a shipping fee to a snack-only cart at or over $25", () => {
-    const result = calculateCartTotal([{ itemType: "snack", unitPriceCents: 2500, quantity: 1 }]);
-
-    expect(result.subtotalCents).toBe(2500);
-    expect(result.shippingCents).toBe(0);
-    expect(result.totalCents).toBe(2500);
-  });
-
-  it("never adds a shipping fee when any box is present, regardless of subtotal", () => {
-    const result = calculateCartTotal([
-      { itemType: "box", unitPriceCents: 1500, quantity: 1 },
-      { itemType: "snack", unitPriceCents: 300, quantity: 1 },
-    ]);
-
-    expect(result.subtotalCents).toBe(1800);
-    expect(result.shippingCents).toBe(0);
-  });
-
   it("returns zero totals for an empty cart", () => {
     const result = calculateCartTotal([]);
     expect(result.subtotalCents).toBe(0);
@@ -54,28 +18,74 @@ describe("calculateCartTotal", () => {
     expect(result.hasBox).toBe(false);
   });
 
-  it("accounts for quantity greater than 1", () => {
-    const result = calculateCartTotal([{ itemType: "box", unitPriceCents: 1500, quantity: 3 }]);
+  it("accounts for quantity greater than 1 in subtotal", () => {
+    const result = calculateCartTotal([{ itemType: "box", unitPriceCents: 1500, quantity: 3, slotCount: 20 }]);
     expect(result.subtotalCents).toBe(4500);
   });
 
-  it("treats a merch-only cart under $25 the same as snack-only - $5 shipping, no box to waive it", () => {
-    const result = calculateCartTotal([{ itemType: "merch", unitPriceCents: 2000, quantity: 1 }]);
-
-    expect(result.hasBox).toBe(false);
-    expect(result.shippingCents).toBe(500);
-    expect(result.totalCents).toBe(2500);
+  it("charges medium box shipping for a 20-slot box", () => {
+    const result = calculateCartTotal([{ itemType: "box", unitPriceCents: 2499, quantity: 1, slotCount: 20 }]);
+    expect(result.shippingCents).toBe(BOX_SHIPPING_MEDIUM_CENTS);
   });
 
-  it("waives shipping for a mixed snack+merch cart once a box is added", () => {
-    const result = calculateCartTotal([
-      { itemType: "merch", unitPriceCents: 2000, quantity: 1 },
-      { itemType: "snack", unitPriceCents: 300, quantity: 1 },
-      { itemType: "box", unitPriceCents: 1500, quantity: 1 },
-    ]);
+  it("charges small box shipping for a 12-slot box", () => {
+    const result = calculateCartTotal([{ itemType: "box", unitPriceCents: 1499, quantity: 1, slotCount: 12 }]);
+    expect(result.shippingCents).toBe(BOX_SHIPPING_SMALL_CENTS);
+  });
 
-    expect(result.hasBox).toBe(true);
+  it("charges large box shipping for a 30-slot box", () => {
+    const result = calculateCartTotal([{ itemType: "box", unitPriceCents: 3499, quantity: 1, slotCount: 30 }]);
+    expect(result.shippingCents).toBe(BOX_SHIPPING_LARGE_CENTS);
+  });
+
+  it("charges snack shipping per snack line", () => {
+    const result = calculateCartTotal([
+      { itemType: "snack", unitPriceCents: 799, quantity: 1 },
+      { itemType: "snack", unitPriceCents: 999, quantity: 2 },
+    ]);
+    expect(result.shippingCents).toBe(SNACK_SHIPPING_CENTS * 2);
+  });
+
+  it("charges merch shipping per merch line", () => {
+    const result = calculateCartTotal([{ itemType: "merch", unitPriceCents: 2999, quantity: 1 }]);
+    expect(result.shippingCents).toBe(MERCH_SHIPPING_CENTS);
+  });
+
+  it("sums shipping across mixed cart types", () => {
+    const result = calculateCartTotal([
+      { itemType: "box", unitPriceCents: 2499, quantity: 1, slotCount: 20 },
+      { itemType: "snack", unitPriceCents: 799, quantity: 1 },
+      { itemType: "merch", unitPriceCents: 2999, quantity: 1 },
+    ]);
+    expect(result.shippingCents).toBe(
+      BOX_SHIPPING_MEDIUM_CENTS + SNACK_SHIPPING_CENTS + MERCH_SHIPPING_CENTS
+    );
+  });
+
+  it("waives all shipping when subtotal reaches the free threshold", () => {
+    const result = calculateCartTotal([
+      { itemType: "box", unitPriceCents: FREE_SHIPPING_THRESHOLD_CENTS, quantity: 1, slotCount: 20 },
+    ]);
     expect(result.shippingCents).toBe(0);
-    expect(result.subtotalCents).toBe(3800);
+  });
+
+  it("still charges shipping one cent below the free threshold", () => {
+    const result = calculateCartTotal([
+      { itemType: "box", unitPriceCents: FREE_SHIPPING_THRESHOLD_CENTS - 1, quantity: 1, slotCount: 20 },
+    ]);
+    expect(result.shippingCents).toBe(BOX_SHIPPING_MEDIUM_CENTS);
+  });
+
+  it("sets hasBox correctly", () => {
+    const withBox = calculateCartTotal([{ itemType: "box", unitPriceCents: 1500, quantity: 1, slotCount: 20 }]);
+    const noBox = calculateCartTotal([{ itemType: "snack", unitPriceCents: 500, quantity: 1 }]);
+    expect(withBox.hasBox).toBe(true);
+    expect(noBox.hasBox).toBe(false);
+  });
+
+  it("quantity does not multiply shipping — one rate per line regardless of units", () => {
+    const qty1 = calculateCartTotal([{ itemType: "snack", unitPriceCents: 799, quantity: 1 }]);
+    const qty5 = calculateCartTotal([{ itemType: "snack", unitPriceCents: 799, quantity: 5 }]);
+    expect(qty1.shippingCents).toBe(qty5.shippingCents);
   });
 });

@@ -11,7 +11,7 @@ import type { CartStackParamList } from "../../navigation/CartStack";
 
 type Nav = NativeStackNavigationProp<CartStackParamList, "Cart">;
 
-const SNACK_ONLY_FREE_SHIPPING_THRESHOLD_CENTS = 2500;
+const FREE_SHIPPING_THRESHOLD_CENTS = 2500;
 
 /**
  * Mirrors (shop)/shop/cart/page.tsx's contents and shipping-nudge copy
@@ -74,7 +74,7 @@ export function CartScreen() {
   }
 
   const { total } = data;
-  const remainingForFreeShipping = SNACK_ONLY_FREE_SHIPPING_THRESHOLD_CENTS - total.subtotalCents;
+  const remainingForFreeShipping = FREE_SHIPPING_THRESHOLD_CENTS - total.subtotalCents;
 
   return (
     <View style={styles.container}>
@@ -106,9 +106,9 @@ export function CartScreen() {
                 {total.shippingCents === 0 ? "Free" : formatPriceCents(total.shippingCents)}
               </Text>
             </View>
-            {!total.hasBox && total.shippingCents > 0 && (
+            {total.shippingCents > 0 && remainingForFreeShipping > 0 && (
               <Text style={styles.nudge}>
-                Add {formatPriceCents(remainingForFreeShipping)} more, or add any box, for free shipping.
+                Add {formatPriceCents(remainingForFreeShipping)} more for free shipping.
               </Text>
             )}
             <View style={[styles.summaryRow, styles.totalRow]}>
