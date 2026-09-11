@@ -4,7 +4,7 @@ import { useRoute, type RouteProp } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { fetchSnackBySlug } from "../../lib/api/catalog";
 import { addSnackToCart } from "../../lib/api/cart";
-import { ZoomableProductImage } from "../../components/shared/ZoomableProductImage";
+import { ScrollView as HScroll, Image as RNImage } from "react-native";
 import { formatPriceCents } from "../../lib/utils/format";
 import { useToast } from "../../lib/toast/toast-context";
 import { colors, radii, spacing, typography } from "../../theme";
@@ -93,6 +93,10 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingBottom: spacing["4xl"],
   },
+  imageStrip: { marginBottom: spacing[4] },
+  imageStripContent: { gap: spacing[2], paddingHorizontal: spacing[4] },
+  imageItem: { width: 280, height: 280, borderRadius: 16 },
+  imageSingle: { width: 280, height: 280, borderRadius: 16 },
   imageWrap: {
     alignItems: "center",
     marginBottom: spacing.lg,
