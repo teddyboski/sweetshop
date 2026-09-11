@@ -1,4 +1,4 @@
-﻿import { create } from "zustand";
+import { create } from "zustand";
 import type { SnackType, Flavor } from "@/lib/validations/cart";
 
 export interface BuildABoxState {
@@ -16,14 +16,14 @@ export const useBuildABoxStore = create<BuildABoxState>((set) => ({
   toggleSnackType: (type) =>
     set((state) => {
       const next = new Set(state.selectedSnackTypes);
-      next.has(type) ? next.delete(type) : next.add(type);
+      if (next.has(type)) { next.delete(type); } else { next.add(type); }
       return { selectedSnackTypes: next };
     }),
 
   toggleFlavor: (flavor) =>
     set((state) => {
       const next = new Set(state.selectedFlavors);
-      next.has(flavor) ? next.delete(flavor) : next.add(flavor);
+      if (next.has(flavor)) { next.delete(flavor); } else { next.add(flavor); }
       return { selectedFlavors: next };
     }),
 

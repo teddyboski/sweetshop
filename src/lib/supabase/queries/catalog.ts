@@ -151,7 +151,7 @@ export async function getActiveDrops() {
     .filter((drop) => drop.boxes && drop.boxes.status === "active")
     .map((drop) => {
       const { boxes, ...rest } = drop;
-      const { product_images, status, ...box } = boxes!;
+      const { product_images, status: _boxStatus, ...box } = boxes!;
       return { ...rest, box: { ...box, imageUrl: primaryImageUrl(product_images) } };
     });
 }
