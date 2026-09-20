@@ -70,8 +70,11 @@ it. That is accepted: they are, in effect, a new customer.
   Clients must not be able to change it: the existing
   `prevent_profile_privilege_escalation` trigger is extended to guard it (service
   role exempt, per the existing exemption migration).
-- Seed: promotion `SCAN15` — percent, value 15, `first_order_only = true`, no
-  expiry, no usage limit (`insert … on conflict (code) do nothing`). Managed later
+- **No seed row in the migration.** The `SCAN15` promotion (percent, value 15,
+  `first_order_only = true`, no expiry, no usage limit) is created as a separate,
+  explicitly approved step **after** the new code is live — see Rollout. Seeding it
+  earlier would let the currently deployed checkout honour `SCAN15` as an ordinary
+  unlimited 15% code (it does not know `first_order_only`). It is managed later
   through the existing admin promotions screens.
 
 ### Server
@@ -146,8 +149,17 @@ it. That is accepted: they are, in effect, a new customer.
 ## Rollout
 
 - `main` auto-deploys to production; **database migrations are pushed manually
-  (`supabase db push`)** and only with Ted's explicit go-ahead (shared production
-  data). Order: merge → push migration → confirm `/scan` and a real test order →
-  only then print labels.
+  (`supabase db push`)** and only with Ted's explicit go-ahead. The shop's
+  integration and e2e tests run against the same shared Supabase project (there is
+  no local Supabase/Docker here), so the schema-only migration must be applied
+  before those tests can pass; it is additive and safe for the currently deployed
+  code (new nullable column, new default-false flag, new table, trigger updates
+  that ignore an `offer_code` the old signup never sends).
+  Order: apply migration (with go-ahead) → tests → merge to `main` (deploys) →
+  confirm `/scan` → create the `SCAN15` promotion (with go-ahead) → one real test
+  order → only then print labels.
+- The earlier sticker campaign (`SNACK10`: 10% off, typed by hand, unlimited,
+  created by `scripts/create-qr-promo.ts`) is untouched and keeps working for
+  stickers already in circulation.
 - Success metrics (SQL, no UI): sign-ups with `signup_offer_code = 'SCAN15'`;
   rows in `promotion_redemptions`.
