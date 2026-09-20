@@ -986,6 +986,7 @@ export type Database = {
           referred_by: string | null
           rewards_points: number
           role: string
+          signup_offer_code: string | null
           stripe_customer_id: string | null
           updated_at: string
         }
@@ -998,6 +999,7 @@ export type Database = {
           referred_by?: string | null
           rewards_points?: number
           role?: string
+          signup_offer_code?: string | null
           stripe_customer_id?: string | null
           updated_at?: string
         }
@@ -1010,6 +1012,7 @@ export type Database = {
           referred_by?: string | null
           rewards_points?: number
           role?: string
+          signup_offer_code?: string | null
           stripe_customer_id?: string | null
           updated_at?: string
         }
@@ -1023,6 +1026,55 @@ export type Database = {
           },
         ]
       }
+      promotion_redemptions: {
+        Row: {
+          created_at: string
+          id: string
+          order_id: string | null
+          promotion_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          order_id?: string | null
+          promotion_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          order_id?: string | null
+          promotion_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotion_redemptions_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_redemptions_promotion_id_fkey"
+            columns: ["promotion_id"]
+            isOneToOne: false
+            referencedRelation: "promotions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_redemptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       promotions: {
         Row: {
           applies_to_shipping: boolean
@@ -1030,6 +1082,7 @@ export type Database = {
           created_at: string
           discount_type: string
           expires_at: string | null
+          first_order_only: boolean
           id: string
           updated_at: string
           usage_limit: number | null
@@ -1042,6 +1095,7 @@ export type Database = {
           created_at?: string
           discount_type: string
           expires_at?: string | null
+          first_order_only?: boolean
           id?: string
           updated_at?: string
           usage_limit?: number | null
@@ -1054,6 +1108,7 @@ export type Database = {
           created_at?: string
           discount_type?: string
           expires_at?: string | null
+          first_order_only?: boolean
           id?: string
           updated_at?: string
           usage_limit?: number | null
