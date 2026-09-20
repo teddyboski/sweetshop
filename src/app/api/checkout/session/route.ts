@@ -6,6 +6,7 @@ import { createStripeClient } from "@/lib/stripe/client";
 import { resolveExistingCartId } from "@/lib/cart/resolve-cart";
 import { getCartContents, type CartLine } from "@/lib/supabase/queries/cart";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit/check";
+import { resolvePromotion } from "@/lib/promotions/resolve-promotion";
 
 /**
  * V1 only ever seeds 'monthly' cadence (see the subscription box seed
@@ -114,30 +115,16 @@ export async function POST(request: NextRequest) {
   // decisions). Redemption similarly only debits the real balance at
   // webhook confirmation via redeem_rewards_points - re-checked there too,
   // since the balance could change between session creation and payment.
-  let promotionId: string | null = null;
-  let promoDiscountCents = 0;
-  if (parsed.data.promoCode) {
-    const { data: promotion } = await admin
-      .from("promotions")
-      .select("id, discount_type, value, usage_limit, used_count, expires_at")
-      .eq("code", parsed.data.promoCode.toUpperCase())
-      .maybeSingle();
-
-    const isUsable =
-      promotion &&
-      (promotion.usage_limit === null || promotion.used_count < promotion.usage_limit) &&
-      (promotion.expires_at === null || new Date(promotion.expires_at) > new Date());
-
-    if (!isUsable) {
-      return NextResponse.json({ data: null, error: { message: "That promo code isn't valid" } }, { status: 400 });
-    }
-
-    promotionId = promotion.id;
-    promoDiscountCents =
-      promotion.discount_type === "percent"
-        ? Math.round((cart.total.subtotalCents * Number(promotion.value)) / 100)
-        : Math.round(Number(promotion.value));
+  const promotion = await resolvePromotion(admin, {
+    userId: cartResult.userId ?? null,
+    promoCode: parsed.data.promoCode,
+    subtotalCents: cart.total.subtotalCents,
+  });
+  if (!promotion.ok) {
+    return NextResponse.json({ data: null, error: { message: promotion.message } }, { status: promotion.status });
   }
+  const promotionId = promotion.promotionId;
+  const promoDiscountCents = promotion.discountCents;
 
   let redeemedPoints = 0;
   if (parsed.data.redeemPoints) {

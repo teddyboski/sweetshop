@@ -95,6 +95,8 @@ afterEach(async () => {
   }
   createdPromotionIds.length = 0;
 
+  await admin.from("promotion_redemptions").delete().eq("user_id", userId);
+  await admin.from("profiles").update({ signup_offer_code: null }).eq("id", userId);
   await admin.from("profiles").update({ rewards_points: rewardsBalanceBeforeAll }).eq("id", userId);
 });
 
@@ -105,6 +107,7 @@ async function seedPromotion(
     usageLimit: number | null;
     usedCount: number;
     expiresAt: string | null;
+    firstOrderOnly: boolean;
   }> = {}
 ) {
   const { data, error } = await admin
@@ -116,6 +119,7 @@ async function seedPromotion(
       usage_limit: overrides.usageLimit ?? null,
       used_count: overrides.usedCount ?? 0,
       expires_at: overrides.expiresAt ?? null,
+      first_order_only: overrides.firstOrderOnly ?? false,
     })
     .select("id, code")
     .single();
@@ -364,5 +368,57 @@ describe("POST /api/checkout/payment-intent", () => {
     expect(paymentIntent.amount).toBe(1500 - 200 - 300); // fixed promo + 1 point = 1 cent
     expect(paymentIntent.metadata.promotion_id).toBe(promotion.id);
     expect(paymentIntent.metadata.redeemed_points).toBe("300");
+  });
+
+  it("auto-applies the signup welcome offer for a customer with no paid order", { timeout: 30_000 }, async () => {
+    const { data: candidates } = await admin
+      .from("snacks")
+      .select("id, price_cents")
+      .eq("is_sellable_individually", true)
+      .eq("status", "active")
+      .gte("price_cents", 299)
+      .limit(25);
+
+    let snack: { id: string; priceCents: number } | null = null;
+    for (const candidate of candidates ?? []) {
+      const { data: stock } = await admin
+        .from("inventory")
+        .select("quantity_on_hand")
+        .eq("snack_id", candidate.id)
+        .maybeSingle();
+      if ((stock?.quantity_on_hand ?? 0) >= 5) {
+        snack = { id: candidate.id, priceCents: candidate.price_cents! };
+        break;
+      }
+    }
+    if (!snack) throw new Error("No active, in-stock, individually sellable snack found for the promotion test");
+
+    const promotion = await seedPromotion({ discountType: "percent", value: 15, firstOrderOnly: true });
+
+    const addResponse = await postCartItem(
+      cartItemRequest({ itemType: "snack", snackId: snack.id, quantity: 1 }, { token: userToken })
+    );
+    expect(addResponse.status).toBe(201);
+    createdCartIds.push(await cartIdForAuthenticatedUser());
+
+    const withoutOfferResponse = await postPaymentIntent(
+      paymentIntentRequest({ shippingAddress: sampleShippingAddress }, { token: userToken })
+    );
+    const withoutOfferBody = await withoutOfferResponse.json();
+    expect(withoutOfferResponse.status).toBe(201);
+    const withoutOffer = await stripe.paymentIntents.retrieve(withoutOfferBody.data.paymentIntentId);
+    expect(withoutOffer.metadata.promotion_id).toBeUndefined();
+
+    await admin.from("profiles").update({ signup_offer_code: promotion.code }).eq("id", userId);
+
+    const withOfferResponse = await postPaymentIntent(
+      paymentIntentRequest({ shippingAddress: sampleShippingAddress }, { token: userToken })
+    );
+    const withOfferBody = await withOfferResponse.json();
+    expect(withOfferResponse.status).toBe(201);
+    const withOffer = await stripe.paymentIntents.retrieve(withOfferBody.data.paymentIntentId);
+
+    expect(withOffer.amount).toBe(withoutOffer.amount - Math.round((snack.priceCents * 15) / 100));
+    expect(withOffer.metadata.promotion_id).toBe(promotion.id);
   });
 });

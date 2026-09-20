@@ -89,6 +89,9 @@ afterEach(async () => {
   }
   createdPromotionIds.length = 0;
 
+  await admin.from("promotion_redemptions").delete().eq("user_id", userId);
+  await admin.from("orders").delete().eq("user_id", userId).eq("total_amount_cents", 777);
+  await admin.from("profiles").update({ signup_offer_code: null }).eq("id", userId);
   await admin.from("profiles").update({ rewards_points: rewardsBalanceBeforeAll }).eq("id", userId);
 });
 
@@ -101,6 +104,7 @@ async function seedPromotion(
     usageLimit: number | null;
     usedCount: number;
     expiresAt: string | null;
+    firstOrderOnly: boolean;
   }> = {}
 ) {
   const { data, error } = await admin
@@ -112,6 +116,7 @@ async function seedPromotion(
       usage_limit: overrides.usageLimit ?? null,
       used_count: overrides.usedCount ?? 0,
       expires_at: overrides.expiresAt ?? null,
+      first_order_only: overrides.firstOrderOnly ?? false,
     })
     .select("id, code")
     .single();
@@ -397,5 +402,225 @@ describe("POST /api/checkout/session", () => {
     expect(session.amount_total).toBe(1500 - 200 - 300); // fixed promo + 1 point = 1 cent
     expect(session.metadata?.promotion_id).toBe(promotion.id);
     expect(session.metadata?.redeemed_points).toBe("300");
+  });
+});
+
+describe("POST /api/checkout/session: promotions on an active snack cart", { timeout: 30_000 }, () => {
+  let snack = { id: "", priceCents: 0 };
+
+  beforeAll(async () => {
+    const { data: candidates } = await admin
+      .from("snacks")
+      .select("id, price_cents")
+      .eq("is_sellable_individually", true)
+      .eq("status", "active")
+      .gte("price_cents", 299)
+      .limit(25);
+
+    for (const candidate of candidates ?? []) {
+      const { data: stock } = await admin
+        .from("inventory")
+        .select("quantity_on_hand")
+        .eq("snack_id", candidate.id)
+        .maybeSingle();
+      if ((stock?.quantity_on_hand ?? 0) >= 5) {
+        snack = { id: candidate.id, priceCents: candidate.price_cents! };
+        return;
+      }
+    }
+    throw new Error("No active, in-stock, individually sellable snack found for the promotion tests");
+  });
+
+  const percentOf = (cents: number, percent: number) => Math.round((cents * percent) / 100);
+
+  async function addSnackForUser() {
+    const response = await postCartItem(
+      cartItemRequest({ itemType: "snack", snackId: snack.id, quantity: 1 }, { token: userToken })
+    );
+    expect(response.ok).toBe(true);
+    createdCartIds.push(await cartIdForAuthenticatedUser());
+  }
+
+  async function addSnackForGuest() {
+    const response = await postCartItem(cartItemRequest({ itemType: "snack", snackId: snack.id, quantity: 1 }));
+    expect(response.ok).toBe(true);
+    const body = await response.json();
+    const cookie = response.headers.get("set-cookie")!.match(/anonymous_cart_id=([^;]+)/)![1];
+    const { data: item } = await admin.from("cart_items").select("cart_id").eq("id", body.data.cartItemId).single();
+    createdCartIds.push(item!.cart_id);
+    return cookie;
+  }
+
+  async function seedPaidOrderForUser() {
+    const { error } = await admin
+      .from("orders")
+      .insert({ user_id: userId, status: "paid", total_amount_cents: 777 });
+    if (error) throw error;
+  }
+
+  async function startSession(body: Record<string, unknown>, opts: { token?: string; cookie?: string } = {}) {
+    const response = await postCheckoutSession(checkoutSessionRequest(body, opts));
+    const json = await response.json();
+    return { response, json };
+  }
+
+  async function appliedDiscount(sessionId: string) {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    return { cents: session.total_details?.amount_discount ?? 0, promotionId: session.metadata?.promotion_id };
+  }
+
+  describe("ordinary typed codes (behaviour that must not change)", () => {
+    it("applies a fixed promo code", async () => {
+      const promotion = await seedPromotion({ discountType: "fixed", value: 300 });
+      const cookie = await addSnackForGuest();
+
+      const { response, json } = await startSession(
+        { guestEmail: "guest-fixed@example.com", promoCode: promotion.code },
+        { cookie }
+      );
+      expect(response.status).toBe(201);
+      expect(await appliedDiscount(json.data.id)).toEqual({ cents: 300, promotionId: promotion.id });
+    });
+
+    it("applies a percent promo code to the subtotal", async () => {
+      const promotion = await seedPromotion({ discountType: "percent", value: 10 });
+      const cookie = await addSnackForGuest();
+
+      const { response, json } = await startSession(
+        { guestEmail: "guest-percent@example.com", promoCode: promotion.code },
+        { cookie }
+      );
+      expect(response.status).toBe(201);
+      expect(await appliedDiscount(json.data.id)).toEqual({
+        cents: percentOf(snack.priceCents, 10),
+        promotionId: promotion.id,
+      });
+    });
+
+    it("rejects an expired promo code with the existing message", async () => {
+      const promotion = await seedPromotion({ expiresAt: new Date(Date.now() - 60_000).toISOString() });
+      const cookie = await addSnackForGuest();
+
+      const { response, json } = await startSession(
+        { guestEmail: "guest-expired@example.com", promoCode: promotion.code },
+        { cookie }
+      );
+      expect(response.status).toBe(400);
+      expect(json.error.message).toBe("That promo code isn't valid");
+    });
+
+    it("rejects a promo code that reached its usage limit with the existing message", async () => {
+      const promotion = await seedPromotion({ usageLimit: 1, usedCount: 1 });
+      const cookie = await addSnackForGuest();
+
+      const { response, json } = await startSession(
+        { guestEmail: "guest-limit@example.com", promoCode: promotion.code },
+        { cookie }
+      );
+      expect(response.status).toBe(400);
+      expect(json.error.message).toBe("That promo code isn't valid");
+    });
+
+    it("rejects an unknown promo code with the existing message", async () => {
+      const cookie = await addSnackForGuest();
+
+      const { response, json } = await startSession(
+        { guestEmail: "guest-unknown@example.com", promoCode: "NOT-A-REAL-CODE" },
+        { cookie }
+      );
+      expect(response.status).toBe(400);
+      expect(json.error.message).toBe("That promo code isn't valid");
+    });
+  });
+
+  describe("first-order welcome offer", () => {
+    it("auto-applies the offer for a customer who signed up through the scan and has no paid order", async () => {
+      const promotion = await seedPromotion({ discountType: "percent", value: 15, firstOrderOnly: true });
+      await admin.from("profiles").update({ signup_offer_code: promotion.code }).eq("id", userId);
+      await addSnackForUser();
+
+      const { response, json } = await startSession({}, { token: userToken });
+      expect(response.status).toBe(201);
+      expect(await appliedDiscount(json.data.id)).toEqual({
+        cents: percentOf(snack.priceCents, 15),
+        promotionId: promotion.id,
+      });
+    });
+
+    it("charges full price, without an error, when the customer has no signup offer", async () => {
+      await seedPromotion({ discountType: "percent", value: 15, firstOrderOnly: true });
+      await addSnackForUser();
+
+      const { response, json } = await startSession({}, { token: userToken });
+      expect(response.status).toBe(201);
+      expect(await appliedDiscount(json.data.id)).toEqual({ cents: 0, promotionId: undefined });
+    });
+
+    it("does not auto-apply once the customer has a paid order", async () => {
+      const promotion = await seedPromotion({ discountType: "percent", value: 15, firstOrderOnly: true });
+      await admin.from("profiles").update({ signup_offer_code: promotion.code }).eq("id", userId);
+      await seedPaidOrderForUser();
+      await addSnackForUser();
+
+      const { response, json } = await startSession({}, { token: userToken });
+      expect(response.status).toBe(201);
+      expect(await appliedDiscount(json.data.id)).toEqual({ cents: 0, promotionId: undefined });
+    });
+
+    it("does not auto-apply once the customer has already redeemed it", async () => {
+      const promotion = await seedPromotion({ discountType: "percent", value: 15, firstOrderOnly: true });
+      await admin.from("profiles").update({ signup_offer_code: promotion.code }).eq("id", userId);
+      await admin.from("promotion_redemptions").insert({ promotion_id: promotion.id, user_id: userId });
+      await addSnackForUser();
+
+      const { response, json } = await startSession({}, { token: userToken });
+      expect(response.status).toBe(201);
+      expect(await appliedDiscount(json.data.id)).toEqual({ cents: 0, promotionId: undefined });
+    });
+
+    it("applies a typed first-order-only code for an eligible customer", async () => {
+      const promotion = await seedPromotion({ discountType: "percent", value: 15, firstOrderOnly: true });
+      await addSnackForUser();
+
+      const { response, json } = await startSession({ promoCode: promotion.code }, { token: userToken });
+      expect(response.status).toBe(201);
+      expect(await appliedDiscount(json.data.id)).toEqual({
+        cents: percentOf(snack.priceCents, 15),
+        promotionId: promotion.id,
+      });
+    });
+
+    it("refuses a typed first-order-only code after a paid order, with a specific message", async () => {
+      const promotion = await seedPromotion({ discountType: "percent", value: 15, firstOrderOnly: true });
+      await seedPaidOrderForUser();
+      await addSnackForUser();
+
+      const { response, json } = await startSession({ promoCode: promotion.code }, { token: userToken });
+      expect(response.status).toBe(400);
+      expect(json.error.message).toBe("That offer is for your first order only");
+    });
+
+    it("refuses a typed first-order-only code from a guest", async () => {
+      const promotion = await seedPromotion({ discountType: "percent", value: 15, firstOrderOnly: true });
+      const cookie = await addSnackForGuest();
+
+      const { response, json } = await startSession(
+        { guestEmail: "guest-offer@example.com", promoCode: promotion.code },
+        { cookie }
+      );
+      expect(response.status).toBe(400);
+      expect(json.error.message).toBe("Log in or sign up to use this offer");
+    });
+
+    it("lets a typed ordinary code win over the auto-applied welcome offer", async () => {
+      const offer = await seedPromotion({ discountType: "percent", value: 15, firstOrderOnly: true });
+      const fixed = await seedPromotion({ discountType: "fixed", value: 300 });
+      await admin.from("profiles").update({ signup_offer_code: offer.code }).eq("id", userId);
+      await addSnackForUser();
+
+      const { response, json } = await startSession({ promoCode: fixed.code }, { token: userToken });
+      expect(response.status).toBe(201);
+      expect(await appliedDiscount(json.data.id)).toEqual({ cents: 300, promotionId: fixed.id });
+    });
   });
 });
