@@ -4,6 +4,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createStripeClient } from "@/lib/stripe/client";
 import { sendOrderConfirmationEmail } from "@/lib/email/send-order-confirmation";
 import { getCartContents } from "@/lib/supabase/queries/cart";
+import { recordPromotionRedemption } from "@/lib/promotions/record-redemption";
 
 const POINTS_PER_DOLLAR = 1; // Milestone 6 plan, Product Decision #9
 const REFERRAL_REWARD_POINTS = 500; // Milestone 9 plan, Product Decision #1
@@ -307,6 +308,7 @@ async function createOrderFromSession(
     if (promoError || incremented === false) {
       console.error(`Promotion ${promotionId} usage could not be recorded for order ${order.id} (paid=true):`, promoError);
     }
+    await recordPromotionRedemption(admin, { promotionId, userId: userId ?? null, orderId: order.id });
   }
 
   const redeemedPointsRaw = session.metadata?.redeemed_points;
@@ -824,6 +826,7 @@ async function createOrderFromPaymentIntent(
     if (promoError || incremented === false) {
       console.error(`Promotion ${promotionId} usage could not be recorded for order ${order.id} (paid=true):`, promoError);
     }
+    await recordPromotionRedemption(admin, { promotionId, userId: userId ?? null, orderId: order.id });
   }
 
   const redeemedPointsRaw = paymentIntent.metadata?.redeemed_points;

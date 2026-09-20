@@ -110,6 +110,9 @@ afterEach(async () => {
   createdSubscriptionIds.length = 0;
 
   for (const cartId of createdCartIds) {
+    await admin.rpc("release_inventory_for_cart", { p_cart_id: cartId });
+  }
+  for (const cartId of createdCartIds) {
     await admin.from("carts").delete().eq("id", cartId);
   }
   createdCartIds.length = 0;
@@ -140,7 +143,12 @@ afterEach(async () => {
 });
 
 async function seedPromotion(
-  overrides: Partial<{ discountType: "percent" | "fixed"; value: number; usageLimit: number | null }> = {}
+  overrides: Partial<{
+    discountType: "percent" | "fixed";
+    value: number;
+    usageLimit: number | null;
+    firstOrderOnly: boolean;
+  }> = {}
 ) {
   const { data, error } = await admin
     .from("promotions")
@@ -149,6 +157,7 @@ async function seedPromotion(
       discount_type: overrides.discountType ?? "fixed",
       value: overrides.value ?? 100,
       usage_limit: overrides.usageLimit ?? null,
+      first_order_only: overrides.firstOrderOnly ?? false,
     })
     .select("id, code")
     .single();
@@ -593,6 +602,97 @@ describe("POST /api/webhooks/stripe", () => {
     const { data: promoAfterRedelivery } = await admin.from("promotions").select("used_count").eq("id", promotion.id).single();
     expect(promoAfterRedelivery!.used_count).toBe(1);
   }, 20000);
+
+  it("records one promotion redemption for a first-order offer, not again on redelivery, and blocks a second use", async () => {
+    const promotion = await seedPromotion({ discountType: "percent", value: 15, firstOrderOnly: true });
+    const customer = await createUser("offer-redeemer");
+
+    // Read-only pick of an active, individually sellable, in-stock snack:
+    // the file's shared sellableSnackId can be archived on the live catalog
+    // (cart add 404s), and this test's checkouts reserve real stock, which
+    // is restored below and by the file's afterEach.
+    const { data: candidates } = await admin
+      .from("snacks")
+      .select("id")
+      .eq("status", "active")
+      .eq("is_sellable_individually", true);
+    const { data: stocked } = await admin
+      .from("inventory")
+      .select("snack_id, quantity_on_hand")
+      .in("snack_id", (candidates ?? []).map((snack) => snack.id))
+      .gte("quantity_on_hand", 5)
+      .limit(1);
+    expect(stocked).toHaveLength(1);
+    const offerSnackId = stocked![0].snack_id;
+    inventoryRestores.push({ snackId: offerSnackId, quantity: stocked![0].quantity_on_hand });
+
+    const cartResponse = await postCartItem(
+      cartItemRequest({ itemType: "snack", snackId: offerSnackId, quantity: 1 }, { token: customer.token })
+    );
+    expect(cartResponse.ok).toBe(true);
+    const { data: cart } = await admin
+      .from("carts")
+      .select("id")
+      .eq("user_id", customer.id)
+      .eq("status", "active")
+      .single();
+    createdCartIds.push(cart!.id);
+
+    const checkoutResponse = await postCheckoutSession(
+      checkoutSessionRequest({ promoCode: promotion.code }, { token: customer.token })
+    );
+    const checkoutBody = await checkoutResponse.json();
+    expect(checkoutResponse.status).toBe(201);
+
+    const realSession = await stripe.checkout.sessions.retrieve(checkoutBody.data.id);
+    const completedSession = { ...realSession, payment_intent: `pi_test_${crypto.randomUUID()}` };
+    const { payload, signature } = buildSignedEvent("checkout.session.completed", completedSession);
+
+    const firstResponse = await postWebhook(webhookRequest(payload, signature));
+    expect(firstResponse.status).toBe(200);
+
+    const { data: order } = await admin
+      .from("orders")
+      .select("id")
+      .eq("stripe_checkout_session_id", checkoutBody.data.id)
+      .single();
+    createdOrderIds.push(order!.id);
+
+    const { data: redemptions } = await admin
+      .from("promotion_redemptions")
+      .select("order_id")
+      .eq("promotion_id", promotion.id)
+      .eq("user_id", customer.id);
+    expect(redemptions).toHaveLength(1);
+    expect(redemptions![0].order_id).toBe(order!.id);
+
+    const secondResponse = await postWebhook(webhookRequest(payload, signature));
+    expect(secondResponse.status).toBe(200);
+    const { data: afterRedelivery } = await admin
+      .from("promotion_redemptions")
+      .select("id")
+      .eq("promotion_id", promotion.id)
+      .eq("user_id", customer.id);
+    expect(afterRedelivery).toHaveLength(1);
+
+    const cartAgain = await postCartItem(
+      cartItemRequest({ itemType: "snack", snackId: offerSnackId, quantity: 1 }, { token: customer.token })
+    );
+    expect(cartAgain.ok).toBe(true);
+    const { data: cart2 } = await admin
+      .from("carts")
+      .select("id")
+      .eq("user_id", customer.id)
+      .eq("status", "active")
+      .single();
+    createdCartIds.push(cart2!.id);
+
+    const secondCheckout = await postCheckoutSession(
+      checkoutSessionRequest({ promoCode: promotion.code }, { token: customer.token })
+    );
+    expect(secondCheckout.status).toBe(400);
+    expect((await secondCheckout.json()).error.message).toBe("That offer is for your first order only");
+  }, 40000);
 
   it("debits redeemed points exactly once and logs reward_redeemed, not again on redelivery", async () => {
     await admin.from("profiles").update({ rewards_points: 1000 }).eq("id", userId);
