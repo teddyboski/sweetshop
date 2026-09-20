@@ -107,12 +107,12 @@ export async function POST(request: NextRequest) {
   }
 
   // Milestone 9: promo code and rewards-points redemption, both optional
-  // and independently validated - only existence/expiry/limit is checked
-  // here (the actual usage_limit increment is atomic and deferred to
-  // webhook confirmation via increment_promotion_used_count, since a
-  // Checkout Session that's created but never paid must never have
-  // consumed a promo's limited uses - see plan doc's engineering
-  // decisions). Redemption similarly only debits the real balance at
+  // and independently validated - eligibility (including first-order rules)
+  // is decided in resolvePromotion, but the actual usage_limit increment is
+  // atomic and deferred to webhook confirmation via
+  // increment_promotion_used_count, since a Checkout Session that's created
+  // but never paid must never have consumed a promo's limited uses - see
+  // plan doc's engineering decisions. Redemption similarly only debits the real balance at
   // webhook confirmation via redeem_rewards_points - re-checked there too,
   // since the balance could change between session creation and payment.
   const promotion = await resolvePromotion(admin, {

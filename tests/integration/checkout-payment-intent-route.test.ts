@@ -81,6 +81,9 @@ afterAll(async () => {
 
 afterEach(async () => {
   for (const cartId of createdCartIds) {
+    await admin.rpc("release_inventory_for_cart", { p_cart_id: cartId });
+  }
+  for (const cartId of createdCartIds) {
     await admin.from("carts").delete().eq("id", cartId);
   }
   createdCartIds.length = 0;
