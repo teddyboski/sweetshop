@@ -22,6 +22,16 @@ describe("signupSchema", () => {
     const result = signupSchema.safeParse({ email: "a@b.com", password: "short" });
     expect(result.success).toBe(false);
   });
+
+  it("accepts an optional offerCode and trims it", () => {
+    const parsed = signupSchema.parse({ email: "a@b.com", password: "password123", offerCode: "  SCAN15 " });
+    expect(parsed.offerCode).toBe("SCAN15");
+  });
+
+  it("rejects an empty offerCode", () => {
+    const result = signupSchema.safeParse({ email: "a@b.com", password: "password123", offerCode: "" });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("loginSchema", () => {

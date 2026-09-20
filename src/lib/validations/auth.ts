@@ -8,6 +8,10 @@ export const signupSchema = z.object({
   // validated against real profiles here - an invalid/unknown code is a
   // silent no-op at the DB layer, not a 400 at this layer.
   referralCode: z.string().trim().min(1).optional(),
+  // Milestone 25: forwarded the same way as referralCode; the
+  // handle_new_user() trigger only keeps it if it names a first_order_only
+  // promotion, so an unknown value is a silent no-op, never a 400 here.
+  offerCode: z.string().trim().min(1).optional(),
 });
 export type SignupInput = z.infer<typeof signupSchema>;
 

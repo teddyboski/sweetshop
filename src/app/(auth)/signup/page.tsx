@@ -11,6 +11,7 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 function SignupForm() {
   const searchParams = useSearchParams();
   const referralCode = searchParams.get("ref");
+  const offerCode = searchParams.get("offer");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -27,10 +28,14 @@ function SignupForm() {
     // Milestone 9: an invalid/unknown code is a silent no-op at the
     // handle_new_user() trigger - never worth validating or blocking
     // signup over here.
+    const signUpMetadata: Record<string, string> = {};
+    if (referralCode) signUpMetadata.referral_code = referralCode;
+    if (offerCode) signUpMetadata.offer_code = offerCode;
+
     const { error: signUpError } = await supabase.auth.signUp({
       email,
       password,
-      ...(referralCode ? { options: { data: { referral_code: referralCode } } } : {}),
+      ...(Object.keys(signUpMetadata).length > 0 ? { options: { data: signUpMetadata } } : {}),
     });
 
     setLoading(false);

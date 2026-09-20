@@ -23,12 +23,14 @@ export async function POST(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
   );
 
+  const signUpMetadata: Record<string, string> = {};
+  if (parsed.data.referralCode) signUpMetadata.referral_code = parsed.data.referralCode;
+  if (parsed.data.offerCode) signUpMetadata.offer_code = parsed.data.offerCode;
+
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
-    ...(parsed.data.referralCode
-      ? { options: { data: { referral_code: parsed.data.referralCode } } }
-      : {}),
+    ...(Object.keys(signUpMetadata).length > 0 ? { options: { data: signUpMetadata } } : {}),
   });
 
   if (error) {

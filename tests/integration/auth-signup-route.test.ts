@@ -91,4 +91,46 @@ describe("POST /api/auth/signup", () => {
     expect(response.status).toBe(400);
     expect(body.error).toBe("email rate limit exceeded");
   });
+
+  it("forwards an offerCode as offer_code metadata, merged with a referral code", async () => {
+    mockSignUp.mockResolvedValueOnce({ data: { user: { id: "fake-user-id-456" } }, error: null });
+
+    const { POST } = await import("@/app/api/auth/signup/route");
+
+    const request = new NextRequest("http://localhost:3000/api/auth/signup", {
+      method: "POST",
+      body: JSON.stringify({
+        email: "a@b.com",
+        password: "password123",
+        referralCode: "abc123",
+        offerCode: "SCAN15",
+      }),
+    });
+    const response = await POST(request);
+
+    expect(response.status).toBe(201);
+    expect(mockSignUp).toHaveBeenCalledWith({
+      email: "a@b.com",
+      password: "password123",
+      options: { data: { referral_code: "abc123", offer_code: "SCAN15" } },
+    });
+  });
+
+  it("forwards only offer_code when there is no referral code", async () => {
+    mockSignUp.mockResolvedValueOnce({ data: { user: { id: "fake-user-id-789" } }, error: null });
+
+    const { POST } = await import("@/app/api/auth/signup/route");
+
+    const request = new NextRequest("http://localhost:3000/api/auth/signup", {
+      method: "POST",
+      body: JSON.stringify({ email: "a@b.com", password: "password123", offerCode: "SCAN15" }),
+    });
+    await POST(request);
+
+    expect(mockSignUp).toHaveBeenCalledWith({
+      email: "a@b.com",
+      password: "password123",
+      options: { data: { offer_code: "SCAN15" } },
+    });
+  });
 });
